@@ -58,6 +58,20 @@ const rolePermissions: Record<string, DefinePermissions> = {
     can('read', 'LoadOrder')
     can('read', 'Report')
   },
+
+  client: (user, { can }) => {
+    // Clients can view catalogs (read-only)
+    can('read', 'Catalog')
+
+    // Clients can view their entries
+    can('read', 'Entry')
+
+    // Clients can view and create load orders for their client
+    can(['read', 'create'], 'LoadOrder')
+
+    // Clients can view reports
+    can('read', 'Report')
+  },
 }
 
 /**

@@ -7,15 +7,27 @@ import { createClient } from "@/lib/supabase/server"
 import type { Entry } from "@/lib/types"
 import { requirePermission } from "@/lib/casl/server-guards"
 import { ProtectedNewButton } from "@/components/protected-new-button"
+import { getClientFilter } from "@/lib/casl/client-filter"
 
 async function getEntries() {
   await requirePermission('read', 'Entry')
 
   const supabase = await createClient()
-  const { data } = await supabase
+
+  // Get client filter if applicable
+  const clientId = await getClientFilter()
+
+  let query = supabase
     .from("entries")
     .select("*, clients(name), suppliers(name)")
     .order("created_at", { ascending: false })
+
+  // Apply client filter for client users
+  if (clientId) {
+    query = query.eq('client_id', clientId)
+  }
+
+  const { data } = await query
 
   return (data || []) as Entry[]
 }

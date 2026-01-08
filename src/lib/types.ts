@@ -125,10 +125,12 @@ export interface WarehouseOperator {
 export interface UserProfile {
   id: string
   full_name: string
-  role: 'admin' | 'manager' | 'operator' | 'viewer'
+  role: 'admin' | 'manager' | 'operator' | 'viewer' | 'client'
+  client_id?: string | null
   is_active: boolean
   created_at: string
   updated_at: string
+  clients?: Client
 }
 
 // Role permissions matrix

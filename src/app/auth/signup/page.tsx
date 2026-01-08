@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -11,6 +11,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { createClient } from "@/lib/supabase/client"
 import { UserPlus } from "lucide-react"
+import type { Client } from "@/lib/types"
 
 export default function SignupPage() {
   const router = useRouter()
@@ -20,9 +21,24 @@ export default function SignupPage() {
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
   const [role, setRole] = useState<string>("viewer")
+  const [clients, setClients] = useState<Client[]>([])
+  const [selectedClient, setSelectedClient] = useState<string>("")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
+
+  useEffect(() => {
+    const loadClients = async () => {
+      const supabase = createClient()
+      const { data } = await supabase
+        .from("clients")
+        .select("*")
+        .eq("active", true)
+        .order("name")
+      setClients(data || [])
+    }
+    loadClients()
+  }, [])
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -51,6 +67,7 @@ export default function SignupPage() {
           data: {
             full_name: fullName,
             role: role,
+            client_id: role === 'client' ? selectedClient : null,
           },
         },
       })
@@ -142,9 +159,36 @@ export default function SignupPage() {
                 <SelectItem value="manager">Manager</SelectItem>
                 <SelectItem value="operator">Operator</SelectItem>
                 <SelectItem value="viewer">Viewer</SelectItem>
+                <SelectItem value="client">Client</SelectItem>
               </SelectContent>
             </Select>
           </div>
+
+          {/* Client Selection - only show if role is 'client' */}
+          {role === 'client' && (
+            <div className="space-y-2">
+              <Label htmlFor="client">
+                Client <span className="text-destructive">*</span>
+              </Label>
+              <Select
+                value={selectedClient}
+                onValueChange={setSelectedClient}
+                disabled={loading}
+                required={role === 'client'}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select client" />
+                </SelectTrigger>
+                <SelectContent>
+                  {clients.map((client) => (
+                    <SelectItem key={client.id} value={client.id}>
+                      {client.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           <div className="space-y-2">
             <Label htmlFor="password">Password</Label>

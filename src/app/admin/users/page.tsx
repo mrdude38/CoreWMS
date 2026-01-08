@@ -14,10 +14,10 @@ async function getUserProfiles() {
 
   const supabase = await createClient()
 
-  // Get all user profiles
+  // Get all user profiles with client relation
   const { data } = await supabase
     .from('user_profiles')
-    .select('*')
+    .select('*, clients(name)')
     .order('created_at', { ascending: false })
 
   return (data || []) as UserProfile[]
@@ -32,6 +32,7 @@ async function UsersContent() {
       case 'manager': return 'default'
       case 'operator': return 'secondary'
       case 'viewer': return 'outline'
+      case 'client': return 'outline'
       default: return 'outline'
     }
   }
@@ -83,6 +84,11 @@ async function UsersContent() {
                         <Badge variant="outline" className="text-red-600">Inactive</Badge>
                       )}
                     </div>
+                    {user.clients && (
+                      <p className="text-sm text-muted-foreground">
+                        Client: {(user.clients as any).name}
+                      </p>
+                    )}
                   </div>
                   <div className="text-sm text-muted-foreground">
                     <p>Created: {new Date(user.created_at).toLocaleDateString()}</p>

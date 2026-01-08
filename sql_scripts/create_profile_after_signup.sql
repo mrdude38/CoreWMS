@@ -28,11 +28,12 @@ BEGIN
     DELETE FROM user_profiles WHERE id = v_user_id;
 
     -- Create the profile
-    INSERT INTO user_profiles (id, full_name, role, is_active, created_at, updated_at)
+    INSERT INTO user_profiles (id, full_name, role, client_id, is_active, created_at, updated_at)
     VALUES (
       v_user_id,
       v_full_name,
       v_role,
+      (v_user_metadata->>'client_id')::UUID,
       true,
       now(),
       now()
@@ -55,11 +56,12 @@ ALTER TABLE user_profiles ENABLE ROW LEVEL SECURITY;
 CREATE OR REPLACE FUNCTION create_user_profile()
 RETURNS TRIGGER AS $$
 BEGIN
-  INSERT INTO user_profiles (id, full_name, role, is_active, created_at, updated_at)
+  INSERT INTO user_profiles (id, full_name, role, client_id, is_active, created_at, updated_at)
   VALUES (
     NEW.id,
     COALESCE(NEW.raw_user_meta_data->>'full_name', NEW.email),
     COALESCE(NEW.raw_user_meta_data->>'role', 'viewer'),
+    (NEW.raw_user_meta_data->>'client_id')::UUID,
     COALESCE((NEW.raw_user_meta_data->>'is_active')::boolean, true),
     now(),
     now()

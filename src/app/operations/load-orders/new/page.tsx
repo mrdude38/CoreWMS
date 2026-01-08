@@ -41,6 +41,9 @@ export default function Page() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const [userClientId, setUserClientId] = useState<string | null>(null)
+  const [isClientUser, setIsClientUser] = useState(false)
+
   const [clients, setClients] = useState<Client[]>([])
   const [carriers, setCarriers] = useState<Carrier[]>([])
   const [entries, setEntries] = useState<EntryWithAvailability[]>([])
@@ -66,8 +69,22 @@ export default function Page() {
   }, [ability, router])
 
   useEffect(() => {
-    loadData()
+    const checkUserClient = async () => {
+      try {
+        const response = await fetch('/api/user/client-filter')
+        const data = await response.json()
+        setUserClientId(data.clientId)
+        setIsClientUser(data.isClientUser)
+      } catch (error) {
+        console.error('Failed to get client filter:', error)
+      }
+    }
+    checkUserClient()
   }, [])
+
+  useEffect(() => {
+    loadData()
+  }, [userClientId])
 
   useEffect(() => {
     // Filter entries by selected client and status "received"
@@ -85,13 +102,32 @@ export default function Page() {
   const loadData = async () => {
     const supabase = createClient()
 
+    // Build clients query with optional filter
+    let clientsQuery = supabase
+      .from("clients")
+      .select("*")
+      .eq("active", true)
+      .order("name")
+
+    // If client user, only show their client
+    if (userClientId) {
+      clientsQuery = clientsQuery.eq('id', userClientId)
+    }
+
     const [clientsRes, carriersRes, entriesRes] = await Promise.all([
-      supabase.from("clients").select("*").eq("active", true).order("name"),
+      clientsQuery,
       supabase.from("carriers").select("*").eq("active", true).order("name"),
       supabase.from("entries").select("*").eq("status", "recibido").order("entry_number"),
     ])
 
-    if (clientsRes.data) setClients(clientsRes.data)
+    if (clientsRes.data) {
+      setClients(clientsRes.data)
+
+      // Auto-select client if only one (client users)
+      if (clientsRes.data.length === 1) {
+        setSelectedClient(clientsRes.data[0].id)
+      }
+    }
     if (carriersRes.data) setCarriers(carriersRes.data)
 
     if (entriesRes.data) {
@@ -290,7 +326,7 @@ export default function Page() {
                 <Label htmlFor="client_id">
                   Client <span className="text-destructive">*</span>
                 </Label>
-                <Select value={selectedClient} onValueChange={setSelectedClient} required>
+                <Select value={selectedClient} onValueChange={setSelectedClient} required disabled={isClientUser}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select a client" />
                   </SelectTrigger>
