@@ -1,65 +1,204 @@
-import Image from "next/image";
+import { Suspense } from "react"
+import { PackageOpen, TruckIcon, Package, Clock } from "lucide-react"
+import Link from "next/link"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { createClient } from "@/lib/supabase/server"
+import { redirect } from 'next/navigation'
+import { ProtectedNewButton } from "@/components/protected-new-button"
 
-export default function Home() {
+async function getDashboardData() {
+  const supabase = await createClient()
+
+  // Check if user is authenticated
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    redirect('/auth/login')
+  }
+
+  const today = new Date().toISOString().split("T")[0]
+
+  const [{ data: openLoadOrders }, { data: todayEntries, count: todayEntriesCount }] = await Promise.all([
+    supabase
+      .from("load_orders")
+      .select("*, clients(name), carriers(name)")
+      .eq("status", "pendiente")
+      .order("created_at", { ascending: false })
+      .limit(5),
+    supabase
+      .from("entries")
+      .select("*", { count: "exact" })
+      .eq("entry_date", today),
+  ])
+
+  return {
+    openLoadOrders: openLoadOrders || [],
+    todayEntriesCount: todayEntriesCount || 0,
+  }
+}
+
+async function DashboardContent() {
+  const { openLoadOrders, todayEntriesCount } = await getDashboardData()
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <>
+      <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight text-balance">Dashboard</h1>
+          <p className="text-muted-foreground">Welcome to your warehouse management system</p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+        <div className="flex flex-wrap gap-2">
+          <ProtectedNewButton
+            href="/operations/entries/new"
+            label="New Entry"
+            subject="Entry"
+          />
+          <ProtectedNewButton
+            href="/operations/load-orders/new"
+            label="New Load Order"
+            subject="LoadOrder"
+          />
         </div>
-      </main>
-    </div>
-  );
+      </div>
+
+      <div className="mb-8 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Open Load Orders</CardTitle>
+            <TruckIcon className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{openLoadOrders.length}</div>
+            <p className="text-xs text-muted-foreground">Active orders awaiting dispatch</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Today's Entries</CardTitle>
+            <PackageOpen className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{todayEntriesCount}</div>
+            <p className="text-xs text-muted-foreground">Received today</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Quick Access</CardTitle>
+            <Package className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              <Button asChild variant="outline" size="sm" className="w-full justify-start">
+                <Link href="/reports">
+                  <Package className="mr-2 h-4 w-4" />
+                  View Reports
+                </Link>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">System Status</CardTitle>
+            <Clock className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-green-600">Operational</div>
+            <p className="text-xs text-muted-foreground">All systems running</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Open Load Orders</CardTitle>
+            <CardDescription>Active orders awaiting completion</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {openLoadOrders.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">No open load orders</div>
+            ) : (
+              <div className="space-y-4">
+                {openLoadOrders.map((order: any) => (
+                  <div
+                    key={order.id}
+                    className="flex items-center justify-between border-b pb-4 last:border-0 last:pb-0"
+                  >
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium">{order.order_number}</p>
+                        <Badge variant="secondary">{order.status}</Badge>
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        {order.clients?.name || "No client"} • {order.carriers?.name || "No carrier"}
+                      </p>
+                      <p className="text-xs text-muted-foreground">{order.total_packages} packages</p>
+                    </div>
+                    <Button asChild variant="outline" size="sm">
+                      <Link href={`/operations/load-orders/${order.id}`}>View</Link>
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Quick Links</CardTitle>
+            <CardDescription>Access frequently used features</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              <Button asChild variant="outline" className="w-full justify-start">
+                <Link href="/operations/entries">
+                  <PackageOpen className="mr-2 h-4 w-4" />
+                  View All Entries
+                </Link>
+              </Button>
+              <Button asChild variant="outline" className="w-full justify-start">
+                <Link href="/operations/load-orders">
+                  <TruckIcon className="mr-2 h-4 w-4" />
+                  View All Load Orders
+                </Link>
+              </Button>
+              <Button asChild variant="outline" className="w-full justify-start">
+                <Link href="/catalogs/clients">
+                  <Package className="mr-2 h-4 w-4" />
+                  Manage Clients
+                </Link>
+              </Button>
+              <Button asChild variant="outline" className="w-full justify-start">
+                <Link href="/reports">
+                  <Clock className="mr-2 h-4 w-4" />
+                  Analytics & Reports
+                </Link>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </>
+  )
+}
+
+export default function Page() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex h-[calc(100vh-8rem)] items-center justify-center">
+          <div className="text-muted-foreground">Loading dashboard...</div>
+        </div>
+      }
+    >
+      <DashboardContent />
+    </Suspense>
+  )
 }
