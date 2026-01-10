@@ -6,6 +6,9 @@ import PasswordReset from '@/emails/password-reset'
 const resend = new Resend(process.env.RESEND_API_KEY)
 
 export async function POST(request: NextRequest) {
+  // Debug mode controlled by environment variable
+  const DEBUG = process.env.DEBUG_PASSWORD_RESET === 'true'
+
   try {
     const { email } = await request.json()
 
@@ -19,7 +22,7 @@ export async function POST(request: NextRequest) {
     // Check if email notifications are enabled
     if (process.env.EMAIL_ENABLED !== 'true') {
       return NextResponse.json(
-        { error: 'Email notifications are not enabled' },
+        { error: 'Email notifications are not enabled', debug: DEBUG ? { EMAIL_ENABLED: process.env.EMAIL_ENABLED } : undefined },
         { status: 503 }
       )
     }
@@ -31,15 +34,19 @@ export async function POST(request: NextRequest) {
 
     if (listError) {
       console.error('Error listing users:', listError)
-      // Don't reveal if user exists or not for security
-      return NextResponse.json({ success: true })
+      return NextResponse.json({
+        success: true,
+        debug: DEBUG ? { stage: 'listUsers', error: listError.message } : undefined
+      })
     }
 
     const userExists = users?.some((user: { email?: string }) => user.email === email)
 
     if (!userExists) {
-      // Don't reveal that user doesn't exist for security
-      return NextResponse.json({ success: true })
+      return NextResponse.json({
+        success: true,
+        debug: DEBUG ? { stage: 'userCheck', userCount: users?.length, userFound: false } : undefined
+      })
     }
 
     // Generate a password reset link using Admin API
@@ -72,14 +79,20 @@ export async function POST(request: NextRequest) {
 
     if (emailError) {
       console.error('Error sending email:', emailError)
-      throw emailError
+      return NextResponse.json({
+        success: false,
+        debug: DEBUG ? { stage: 'sendEmail', error: emailError } : undefined
+      }, { status: 500 })
     }
 
-    return NextResponse.json({ success: true })
+    return NextResponse.json({
+      success: true,
+      debug: DEBUG ? { stage: 'complete', emailSent: true } : undefined
+    })
   } catch (error) {
     console.error('Password reset error:', error)
     return NextResponse.json(
-      { error: 'Failed to process password reset request' },
+      { error: 'Failed to process password reset request', debug: DEBUG ? { stage: 'catch', error: String(error) } : undefined },
       { status: 500 }
     )
   }
