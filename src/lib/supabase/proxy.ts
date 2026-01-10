@@ -38,7 +38,7 @@ export async function updateSession(request: NextRequest) {
   console.log(`🔍 Middleware: ${request.nextUrl.pathname} - User: ${user ? user.email : 'null'}`)
 
   // Define public routes that don't require authentication
-  const publicRoutes = ['/auth/login', '/auth/signup', '/auth/forgot-password', '/auth/callback']
+  const publicRoutes = ['/auth/login', '/auth/signup', '/auth/forgot-password', '/auth/callback', '/auth/reset-password', '/api/auth/reset-password']
   const isPublicRoute = publicRoutes.some(route => request.nextUrl.pathname.startsWith(route))
 
   // If user is not authenticated and trying to access protected route
