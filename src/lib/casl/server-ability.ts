@@ -1,10 +1,14 @@
 import { defineAbilityFor } from './factory'
-import { createClient } from '@/lib/supabase/server'
+import { getCurrentUserProfile } from '@/lib/auth/server-auth'
 import type { UserProfile } from '@/lib/types'
 
 /**
  * Get the current user's abilities in a server component
- * This function fetches the user's profile from Supabase and creates an Ability instance
+ * This function fetches the user's profile and creates an Ability instance
+ *
+ * Note: User authentication is verified by middleware, so this function
+ * assumes the user is already authenticated on protected routes.
+ *
  * @returns AppAbility instance for the current user
  * @example
  * const ability = await getServerAbility()
@@ -13,21 +17,6 @@ import type { UserProfile } from '@/lib/types'
  * }
  */
 export async function getServerAbility() {
-  const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    return defineAbilityFor(null)
-  }
-
-  const { data: profile } = await supabase
-    .from('user_profiles')
-    .select('*')
-    .eq('id', user.id)
-    .single()
-
+  const profile = await getCurrentUserProfile()
   return defineAbilityFor(profile as UserProfile | null)
 }

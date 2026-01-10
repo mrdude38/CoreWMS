@@ -1,24 +1,15 @@
 import { Suspense } from "react"
-import { redirect } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { createClient } from "@/lib/supabase/server"
+import { requireUser, getCurrentUserProfile } from "@/lib/auth/server-auth"
 import type { UserProfile } from "@/lib/types"
 import { User, Mail, Shield, Calendar } from "lucide-react"
 
 async function getUserProfile() {
-  const supabase = await createClient()
-
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/auth/login')
-
-  const { data: profile } = await supabase
-    .from('user_profiles')
-    .select('*')
-    .eq('id', user.id)
-    .single()
-
-  if (!profile) redirect('/auth/login')
+  // User authentication is verified by middleware
+  // requireUser() is safe to use here - it will never throw on protected routes
+  const user = await requireUser()
+  const profile = await getCurrentUserProfile()
 
   return { user, profile: profile as UserProfile }
 }

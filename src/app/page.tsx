@@ -5,17 +5,13 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { createClient } from "@/lib/supabase/server"
-import { redirect } from 'next/navigation'
 import { ProtectedNewButton } from "@/components/protected-new-button"
 
 async function getDashboardData() {
   const supabase = await createClient()
 
-  // Check if user is authenticated
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) {
-    redirect('/auth/login')
-  }
+  // User authentication is verified by middleware
+  // No need to check here - middleware redirects unauthenticated users
 
   const today = new Date().toISOString().split("T")[0]
 
