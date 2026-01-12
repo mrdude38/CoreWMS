@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -8,14 +8,68 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { createClient } from "@/lib/supabase/client"
-import { Lock } from "lucide-react"
+import { Lock, Loader2 } from "lucide-react"
 
 export default function ResetPasswordPage() {
   const router = useRouter()
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
   const [loading, setLoading] = useState(false)
+  const [initializing, setInitializing] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [sessionReady, setSessionReady] = useState(false)
+
+  // Handle hash tokens from Supabase recovery link
+  useEffect(() => {
+    const handleHashTokens = async () => {
+      try {
+        const supabase = createClient()
+
+        // Check if we have hash parameters (from Supabase redirect)
+        const hash = window.location.hash
+        if (hash && hash.includes('access_token')) {
+          // Parse hash parameters
+          const params = new URLSearchParams(hash.substring(1))
+          const accessToken = params.get('access_token')
+          const refreshToken = params.get('refresh_token')
+
+          if (accessToken && refreshToken) {
+            // Set the session with the tokens from the hash
+            const { error: sessionError } = await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken,
+            })
+
+            if (sessionError) {
+              console.error('Session error:', sessionError)
+              setError('Invalid or expired reset link. Please request a new one.')
+              setInitializing(false)
+              return
+            }
+
+            // Clear the hash from the URL for cleaner UX
+            window.history.replaceState(null, '', window.location.pathname)
+            setSessionReady(true)
+          }
+        } else {
+          // No hash params - check if we already have a valid session
+          const { data: { session } } = await supabase.auth.getSession()
+          if (session) {
+            setSessionReady(true)
+          } else {
+            setError('No valid session found. Please request a new password reset link.')
+          }
+        }
+      } catch (err) {
+        console.error('Error initializing session:', err)
+        setError('Failed to initialize session. Please try again.')
+      } finally {
+        setInitializing(false)
+      }
+    }
+
+    handleHashTokens()
+  }, [])
 
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -51,6 +105,39 @@ export default function ResetPasswordPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  // Show loading state while initializing
+  if (initializing) {
+    return (
+      <Card>
+        <CardContent className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </CardContent>
+      </Card>
+    )
+  }
+
+  // Show error if no valid session
+  if (!sessionReady) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Reset Password</CardTitle>
+          <CardDescription>Unable to reset password</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Alert variant="destructive">
+            <AlertDescription>{error || 'Invalid or expired reset link.'}</AlertDescription>
+          </Alert>
+        </CardContent>
+        <CardFooter>
+          <Button variant="outline" className="w-full" onClick={() => router.push('/auth/forgot-password')}>
+            Request New Reset Link
+          </Button>
+        </CardFooter>
+      </Card>
+    )
   }
 
   return (

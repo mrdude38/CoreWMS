@@ -50,11 +50,12 @@ export async function POST(request: NextRequest) {
     }
 
     // Generate a password reset link using Admin API
+    // Redirect directly to reset-password page - it will handle the hash tokens client-side
     const { data: resetData, error: adminResetError } = await supabaseAdmin.auth.admin.generateLink({
       type: 'recovery',
       email: email,
       options: {
-        redirectTo: `${request.nextUrl.origin}/auth/callback?type=recovery`,
+        redirectTo: `${request.nextUrl.origin}/auth/reset-password`,
       }
     })
 
