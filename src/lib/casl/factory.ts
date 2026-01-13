@@ -47,8 +47,8 @@ const rolePermissions: Record<string, DefinePermissions> = {
     // Reports
     can('read', 'Report')
 
-    // Emails (read only)
-    can('read', 'Email')
+    // Emails (can send notifications when creating entries)
+    can(['read', 'create'], 'Email')
   },
 
   viewer: (user, { can }) => {
