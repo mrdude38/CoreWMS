@@ -41,8 +41,8 @@ export async function POST(request: NextRequest) {
       .select(`
         *,
         clients (id, name, email),
-        suppliers (id, name, email),
-        carriers (id, name, email)
+        suppliers (id, name),
+        carriers (id, name)
       `)
       .eq('id', entryId)
       .single()
@@ -72,20 +72,8 @@ export async function POST(request: NextRequest) {
       results.push({ recipient: 'client', ...result })
     }
 
-    // Send to supplier if email exists
-    if (entry.suppliers?.email) {
-      const result = await sendEmail({
-        to: entry.suppliers.email,
-        subject: `New Entry: ${entry.entry_number}`,
-        template: 'entry-notification',
-        data: {
-          entry,
-          recipientType: 'supplier',
-          recipientName: entry.suppliers.name,
-        },
-      })
-      results.push({ recipient: 'supplier', ...result })
-    }
+    // Note: Suppliers and carriers don't have email in the database
+    // Only clients receive email notifications
 
     // Send to internal users with notification preferences enabled
     const { data: profiles } = await supabase
