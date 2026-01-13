@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
 import { createClient } from "@/lib/supabase/client"
 import { ArrowLeft, Loader2 } from "lucide-react"
 import type { Client } from "@/lib/types"
@@ -83,11 +82,8 @@ export default function Page({ params }: PageProps) {
         .from("clients")
         .update({
           name: formData.get("name") as string,
-          contact_name: formData.get("contact_name") as string || null,
           email: formData.get("email") as string || null,
           phone: formData.get("phone") as string || null,
-          address: formData.get("address") as string || null,
-          updated_at: new Date().toISOString(),
         })
         .eq("id", clientId)
         .select()
@@ -174,16 +170,6 @@ export default function Page({ params }: PageProps) {
               </div>
 
               <div className="grid gap-2">
-                <Label htmlFor="contact_name">Contact Name</Label>
-                <Input
-                  id="contact_name"
-                  name="contact_name"
-                  placeholder="Enter contact person name"
-                  defaultValue={client.contact_name || ""}
-                />
-              </div>
-
-              <div className="grid gap-2">
                 <Label htmlFor="email">Email</Label>
                 <Input
                   id="email"
@@ -205,16 +191,6 @@ export default function Page({ params }: PageProps) {
                 />
               </div>
 
-              <div className="grid gap-2">
-                <Label htmlFor="address">Address</Label>
-                <Textarea
-                  id="address"
-                  name="address"
-                  placeholder="Enter full address"
-                  rows={3}
-                  defaultValue={client.address || ""}
-                />
-              </div>
             </div>
 
             {error && <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</div>}

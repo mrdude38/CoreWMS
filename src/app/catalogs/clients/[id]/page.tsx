@@ -1,10 +1,9 @@
 import { Suspense } from "react"
 import Link from "next/link"
 import { notFound } from "next/navigation"
-import { ArrowLeft, Mail, Phone, MapPin, User, Building2 } from "lucide-react"
+import { ArrowLeft, Mail, Phone, Building2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
 import { createClient } from "@/lib/supabase/server"
 import { requirePermission } from "@/lib/casl/server-guards"
 import type { Client } from "@/lib/types"
@@ -79,13 +78,6 @@ async function ClientDetail({ id }: { id: string }) {
                 </div>
               </div>
               <div className="flex items-start gap-3">
-                <User className="h-5 w-5 text-muted-foreground mt-0.5" />
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">Contact Person</p>
-                  <p className="text-base">{client.contact_name || "Not provided"}</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3">
                 <Mail className="h-5 w-5 text-muted-foreground mt-0.5" />
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Email</p>
@@ -115,36 +107,15 @@ async function ClientDetail({ id }: { id: string }) {
           </CardContent>
         </Card>
 
-        {/* Address */}
-        {client.address && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Address</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-start gap-3">
-                <MapPin className="h-5 w-5 text-muted-foreground mt-0.5" />
-                <p className="text-base whitespace-pre-wrap">{client.address}</p>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
         {/* Timestamps */}
         <Card>
           <CardHeader>
             <CardTitle>Record Information</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid gap-6 md:grid-cols-2">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Created At</p>
-                <p className="text-base">{new Date(client.created_at).toLocaleString()}</p>
-              </div>
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Updated At</p>
-                <p className="text-base">{new Date(client.updated_at).toLocaleString()}</p>
-              </div>
+            <div>
+              <p className="text-sm font-medium text-muted-foreground">Created At</p>
+              <p className="text-base">{new Date(client.created_at).toLocaleString()}</p>
             </div>
           </CardContent>
         </Card>
