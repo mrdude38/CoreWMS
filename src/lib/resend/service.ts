@@ -50,6 +50,12 @@ export async function sendEmail({
       return { success: true, messageId: 'disabled' }
     }
 
+    // Check if resend client is available
+    if (!resend) {
+      console.error('Resend client not initialized - RESEND_API_KEY may be missing')
+      return { success: false, error: 'Email service not configured' }
+    }
+
     // Get template component
     const TemplateComponent = await getTemplate(template)
     if (!TemplateComponent) {
