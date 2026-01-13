@@ -67,7 +67,14 @@ function LoginForm() {
 
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="text-center">
+        <div className="flex justify-center mb-4">
+          <img
+            src="/logo.png"
+            alt="Core Logistics"
+            className="h-16 w-auto object-contain"
+          />
+        </div>
         <CardTitle>Login</CardTitle>
         <CardDescription>Enter your credentials to access the system</CardDescription>
       </CardHeader>

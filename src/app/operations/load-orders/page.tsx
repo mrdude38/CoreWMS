@@ -19,6 +19,7 @@ async function getLoadOrders() {
   let query = supabase
     .from("load_orders")
     .select("*, clients(name), carriers(name)")
+    .neq("status", "salida") // Exclude "salida" - they appear in Exits page
     .order("created_at", { ascending: false })
 
   // Apply client filter for client users
