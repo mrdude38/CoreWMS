@@ -1,5 +1,11 @@
 import type { EmailTemplate } from '@/lib/types'
 
+export interface EmailAttachment {
+  filename: string
+  content: Buffer | string
+  contentType?: string
+}
+
 export interface SendEmailParams {
   to: string | string[]
   subject: string
@@ -7,6 +13,7 @@ export interface SendEmailParams {
   data: Record<string, any>
   bcc?: string[]
   replyTo?: string
+  attachments?: EmailAttachment[]
 }
 
 export interface EmailResult {

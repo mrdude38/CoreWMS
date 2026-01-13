@@ -42,6 +42,7 @@ export async function sendEmail({
   data,
   bcc = [],
   replyTo,
+  attachments = [],
 }: SendEmailParams): Promise<EmailResult> {
   try {
     // Check if emails are enabled
@@ -71,6 +72,13 @@ export async function sendEmail({
       bccRecipients.push(EMAIL_CONFIG.bccAdmin)
     }
 
+    // Prepare attachments for Resend
+    const resendAttachments = attachments.map(att => ({
+      filename: att.filename,
+      content: att.content,
+      content_type: att.contentType,
+    }))
+
     // Send email
     const { data: result, error } = await resend.emails.send({
       from: `${EMAIL_CONFIG.fromName} <${EMAIL_CONFIG.from}>`,
@@ -79,6 +87,7 @@ export async function sendEmail({
       html,
       bcc: bccRecipients.length > 0 ? bccRecipients : undefined,
       replyTo,
+      attachments: resendAttachments.length > 0 ? resendAttachments : undefined,
     })
 
     if (error) {
