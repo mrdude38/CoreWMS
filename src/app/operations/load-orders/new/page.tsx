@@ -87,10 +87,10 @@ export default function Page() {
   }, [userClientId])
 
   useEffect(() => {
-    // Filter entries by selected client and status "received"
+    // Filter entries by selected client (status already filtered in query)
     if (selectedClient) {
       const filtered = entries.filter(
-        (entry) => entry.client_id === selectedClient && entry.status === "received"
+        (entry) => entry.client_id === selectedClient
       )
       setFilteredEntries(filtered)
     } else {
