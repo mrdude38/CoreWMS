@@ -79,7 +79,7 @@ export default function Page({ params }: PageProps) {
 
     try {
       const supabase = createClient()
-      const { error: updateError } = await supabase
+      const { data, error: updateError } = await supabase
         .from("clients")
         .update({
           name: formData.get("name") as string,
@@ -90,16 +90,25 @@ export default function Page({ params }: PageProps) {
           updated_at: new Date().toISOString(),
         })
         .eq("id", clientId)
+        .select()
+
+      console.log('Update response:', { data, updateError })
 
       if (updateError) {
         console.error('Update error:', updateError)
         throw updateError
       }
 
+      if (!data || data.length === 0) {
+        throw new Error("No se pudo actualizar el cliente. Verifica que tienes permisos de edición.")
+      }
+
       router.push(`/catalogs/clients/${clientId}`)
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error updating client:', err)
-      setError(err instanceof Error ? err.message : "An error occurred")
+      // Handle Supabase error structure
+      const errorMessage = err?.message || err?.error_description || err?.details || JSON.stringify(err) || "An error occurred"
+      setError(errorMessage)
     } finally {
       setLoading(false)
     }
