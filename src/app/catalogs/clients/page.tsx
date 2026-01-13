@@ -57,7 +57,6 @@ async function ClientsContent() {
                   <div className="space-y-1">
                     <p className="font-medium">{client.name}</p>
                     <div className="flex flex-col gap-1 text-sm text-muted-foreground">
-                      {client.contact_name && <span>Contact: {client.contact_name}</span>}
                       {client.email && <span>{client.email}</span>}
                       {client.phone && <span>{client.phone}</span>}
                     </div>
