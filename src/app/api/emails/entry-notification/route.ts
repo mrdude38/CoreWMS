@@ -4,20 +4,32 @@ import { getServerAbility } from '@/lib/casl/server-ability'
 import { sendEmail, shouldSendNotification } from '@/lib/resend/service'
 
 export async function POST(request: NextRequest) {
+  const DEBUG = process.env.DEBUG_EMAIL === 'true'
+
   try {
+    if (DEBUG) console.log('📧 Entry notification API called')
+
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
 
+    if (DEBUG) console.log('📧 User:', user?.email || 'null')
+
     if (!user) {
+      console.log('📧 Unauthorized - no user found')
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const ability = await getServerAbility()
-    if (!ability.can('create', 'Email')) {
+    const canCreateEmail = ability.can('create', 'Email')
+    if (DEBUG) console.log('📧 Can create email:', canCreateEmail)
+
+    if (!canCreateEmail) {
+      console.log('📧 Insufficient permissions for user:', user.email)
       return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 })
     }
 
     const { entryId } = await request.json()
+    if (DEBUG) console.log('📧 Entry ID:', entryId)
 
     if (!entryId) {
       return NextResponse.json({ error: 'Missing entryId' }, { status: 400 })
@@ -36,13 +48,17 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (entryError || !entry) {
+      console.log('📧 Entry not found:', entryId, entryError?.message)
       return NextResponse.json({ error: 'Entry not found' }, { status: 404 })
     }
+
+    if (DEBUG) console.log('📧 Entry found:', entry.entry_number)
 
     const results: any[] = []
 
     // Send to client if email exists
     if (entry.clients?.email) {
+      if (DEBUG) console.log('📧 Sending to client:', entry.clients.email)
       const result = await sendEmail({
         to: entry.clients.email,
         subject: `New Entry: ${entry.entry_number}`,
@@ -101,12 +117,14 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    if (DEBUG) console.log('📧 Email results:', JSON.stringify(results))
+
     return NextResponse.json({
       success: true,
       results,
     })
   } catch (error) {
-    console.error('Entry notification error:', error)
+    console.error('📧 Entry notification error:', error)
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

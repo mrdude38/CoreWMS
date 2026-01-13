@@ -215,6 +215,7 @@ export default function Page() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ entryId: entry.id }),
+          credentials: 'include', // Include auth cookies
         }).catch(console.error) // Don't block on email errors
       }
 
