@@ -32,13 +32,8 @@ export default function Page({ params }: PageProps) {
     params.then(({ id }) => setClientId(id))
   }, [params])
 
-  // Check permissions and load client data
+  // Load client data
   useEffect(() => {
-    if (!ability.can('update', 'Catalog')) {
-      router.push('/')
-      return
-    }
-
     if (!clientId) return
 
     const loadClient = async () => {
@@ -61,7 +56,17 @@ export default function Page({ params }: PageProps) {
     }
 
     loadClient()
-  }, [ability, router, clientId])
+  }, [clientId])
+
+  // Check permissions after ability is loaded
+  useEffect(() => {
+    // Wait until ability has rules loaded (not empty)
+    if (ability.rules.length === 0) return
+
+    if (!ability.can('update', 'Catalog')) {
+      router.push('/')
+    }
+  }, [ability, router])
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -78,17 +83,22 @@ export default function Page({ params }: PageProps) {
         .from("clients")
         .update({
           name: formData.get("name") as string,
-          contact_name: formData.get("contact_name") as string,
-          email: formData.get("email") as string,
-          phone: formData.get("phone") as string,
-          address: formData.get("address") as string,
+          contact_name: formData.get("contact_name") as string || null,
+          email: formData.get("email") as string || null,
+          phone: formData.get("phone") as string || null,
+          address: formData.get("address") as string || null,
+          updated_at: new Date().toISOString(),
         })
         .eq("id", clientId)
 
-      if (updateError) throw updateError
+      if (updateError) {
+        console.error('Update error:', updateError)
+        throw updateError
+      }
 
       router.push(`/catalogs/clients/${clientId}`)
     } catch (err) {
+      console.error('Error updating client:', err)
       setError(err instanceof Error ? err.message : "An error occurred")
     } finally {
       setLoading(false)
