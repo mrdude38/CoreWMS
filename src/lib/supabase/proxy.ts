@@ -38,8 +38,14 @@ export async function updateSession(request: NextRequest) {
   console.log(`🔍 Middleware: ${request.nextUrl.pathname} - User: ${user ? user.email : 'null'}`)
 
   // Define public routes that don't require authentication
-  const publicRoutes = ['/auth/login', '/auth/signup', '/auth/forgot-password', '/auth/callback', '/auth/reset-password', '/api/auth/reset-password']
+  const publicRoutes = ['/auth/login', '/auth/signup', '/auth/forgot-password', '/auth/callback', '/auth/reset-password']
   const isPublicRoute = publicRoutes.some(route => request.nextUrl.pathname.startsWith(route))
+
+  // API routes handle their own authentication - don't redirect them
+  const isApiRoute = request.nextUrl.pathname.startsWith('/api/')
+  if (isApiRoute) {
+    return supabaseResponse
+  }
 
   // If user is not authenticated and trying to access protected route
   if (!user && !isPublicRoute) {
