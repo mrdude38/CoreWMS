@@ -45,7 +45,8 @@ export async function POST(request: NextRequest) {
         *,
         clients (id, name, email),
         suppliers (id, name),
-        carriers (id, name)
+        carriers (id, name),
+        package_types (id, name)
       `)
       .eq('id', entryId)
       .single()

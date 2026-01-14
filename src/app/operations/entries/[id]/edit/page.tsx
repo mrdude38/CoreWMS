@@ -59,6 +59,7 @@ export default function Page() {
   const [selectedStatus, setSelectedStatus] = useState<string>("pendiente")
   const [totalPackages, setTotalPackages] = useState<string>("0")
   const [totalWeight, setTotalWeight] = useState<string>("")
+  const [description, setDescription] = useState<string>("")
   const [notes, setNotes] = useState<string>("")
   const [isDamaged, setIsDamaged] = useState(false)
   const [damageDescription, setDamageDescription] = useState<string>("")
@@ -110,11 +111,12 @@ export default function Page() {
       setSelectedClientId(entryData.client_id || "")
       setSelectedSupplierId(entryData.supplier_id || "")
       setSelectedCarrierId(entryData.carrier_id || "")
-      setSelectedPackageTypeId(entryData.package_type || "")
+      setSelectedPackageTypeId((entryData as any).package_type_id || "")
       setSelectedReceivedBy(entryData.received_by || "")
       setSelectedStatus(entryData.status)
       setTotalPackages(entryData.total_packages?.toString() || "0")
       setTotalWeight(entryData.total_weight?.toString() || "")
+      setDescription(entryData.description || "")
       setNotes(entryData.notes || "")
       setIsDamaged(entryData.is_damaged || false)
       setDamageDescription("")
@@ -187,6 +189,7 @@ export default function Page() {
         total_packages: Number.parseInt(totalPackages) || 0,
         total_weight: totalWeight ? Number.parseFloat(totalWeight) : null,
         received_by: selectedReceivedBy || null,
+        description: description || null,
         notes: notes || null,
         is_damaged: isDamaged,
         damage_description: isDamaged ? damageDescription : null,
@@ -443,6 +446,18 @@ export default function Page() {
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+
+            {/* Description - Full width */}
+            <div className="grid gap-2">
+              <Label htmlFor="description">Description</Label>
+              <Textarea
+                id="description"
+                placeholder="Merchandise description..."
+                rows={2}
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+              />
             </div>
 
             {/* Notes - Full width */}
