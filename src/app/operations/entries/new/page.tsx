@@ -162,7 +162,7 @@ export default function Page() {
         client_id: formData.get("client_id") as string,
         supplier_id: formData.get("supplier_id") as string,
         carrier_id: (formData.get("carrier_id") as string) || null,
-        package_type: (formData.get("package_type") as string) || null,
+        package_type_id: (formData.get("package_type") as string) || null,
         entry_date: new Date().toISOString().split('T')[0], // Today's date in YYYY-MM-DD format
         status: formData.get("status") as string || "pendiente",
         total_packages: Number.parseInt(formData.get("total_packages") as string) || 0,
