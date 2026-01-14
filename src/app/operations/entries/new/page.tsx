@@ -162,12 +162,13 @@ export default function Page() {
         client_id: formData.get("client_id") as string,
         supplier_id: formData.get("supplier_id") as string,
         carrier_id: (formData.get("carrier_id") as string) || null,
-        package_type_id: (formData.get("package_type") as string) || null,
+        package_type: (formData.get("package_type") as string) || null,
         entry_date: new Date().toISOString().split('T')[0], // Today's date in YYYY-MM-DD format
         status: formData.get("status") as string || "pendiente",
         total_packages: Number.parseInt(formData.get("total_packages") as string) || 0,
-        total_weight: Number.parseFloat(formData.get("total_weight_lbs") as string) || null,
+        total_weight_lbs: Number.parseFloat(formData.get("total_weight_lbs") as string) || null,
         received_by: (formData.get("received_by") as string) || null,
+        description: (formData.get("description") as string) || null,
         notes: formData.get("notes") as string || null,
         is_damaged: isDamaged,
         damage_description: isDamaged ? (formData.get("damage_description") as string) : null,
@@ -435,6 +436,12 @@ export default function Page() {
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+
+            {/* Description - Full width */}
+            <div className="grid gap-2">
+              <Label htmlFor="description">Description</Label>
+              <Textarea id="description" name="description" placeholder="Merchandise description..." rows={2} />
             </div>
 
             {/* Notes - Full width */}

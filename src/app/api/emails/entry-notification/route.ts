@@ -89,32 +89,27 @@ export async function POST(request: NextRequest) {
       // Continue without PDF if generation fails
     }
 
-    // Fetch file attachments from storage
+    // Fetch file attachments from Vercel Blob storage
     if (entryAttachments && entryAttachments.length > 0) {
       for (const attachment of entryAttachments) {
         try {
-          // Extract storage path from file_url
-          const urlParts = attachment.file_url.split('/storage/v1/object/public/')
-          if (urlParts.length > 1) {
-            const storagePath = urlParts[1]
-            const bucketAndPath = storagePath.split('/')
-            const bucket = bucketAndPath[0]
-            const filePath = bucketAndPath.slice(1).join('/')
+          if (DEBUG) console.log('📧 Fetching attachment from URL:', attachment.file_url)
 
-            const { data: fileData, error: fileError } = await supabase
-              .storage
-              .from(bucket)
-              .download(filePath)
+          // Fetch file directly from URL (works with Vercel Blob or any public URL)
+          const response = await fetch(attachment.file_url)
 
-            if (fileData && !fileError) {
-              const buffer = Buffer.from(await fileData.arrayBuffer())
-              emailAttachments.push({
-                filename: attachment.file_name,
-                content: buffer,
-                contentType: attachment.file_type || 'application/octet-stream',
-              })
-              if (DEBUG) console.log('📧 Attachment fetched:', attachment.file_name)
-            }
+          if (response.ok) {
+            const arrayBuffer = await response.arrayBuffer()
+            const buffer = Buffer.from(arrayBuffer)
+
+            emailAttachments.push({
+              filename: attachment.file_name,
+              content: buffer,
+              contentType: attachment.file_type || 'application/octet-stream',
+            })
+            if (DEBUG) console.log('📧 Attachment fetched:', attachment.file_name, 'Size:', buffer.length)
+          } else {
+            console.error('📧 Failed to fetch attachment:', attachment.file_name, 'Status:', response.status)
           }
         } catch (attachError) {
           console.error('📧 Failed to fetch attachment:', attachment.file_name, attachError)
