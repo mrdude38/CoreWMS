@@ -166,7 +166,7 @@ export default function Page() {
         entry_date: new Date().toISOString().split('T')[0], // Today's date in YYYY-MM-DD format
         status: formData.get("status") as string || "pendiente",
         total_packages: Number.parseInt(formData.get("total_packages") as string) || 0,
-        total_weight_lbs: Number.parseFloat(formData.get("total_weight_lbs") as string) || null,
+        total_weight: Number.parseFloat(formData.get("total_weight_lbs") as string) || null,
         received_by: (formData.get("received_by") as string) || null,
         description: (formData.get("description") as string) || null,
         notes: formData.get("notes") as string || null,

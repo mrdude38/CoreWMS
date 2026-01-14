@@ -41,7 +41,7 @@ export interface Entry {
   status: "pending" | "received"
   total_packages: number
   package_type?: string
-  total_weight_lbs?: number
+  total_weight?: number
   received_by?: string
   description?: string
   notes?: string

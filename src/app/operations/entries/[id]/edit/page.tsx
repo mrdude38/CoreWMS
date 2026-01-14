@@ -114,7 +114,7 @@ export default function Page() {
       setSelectedReceivedBy(entryData.received_by || "")
       setSelectedStatus(entryData.status)
       setTotalPackages(entryData.total_packages?.toString() || "0")
-      setTotalWeight(entryData.total_weight_lbs?.toString() || "")
+      setTotalWeight(entryData.total_weight?.toString() || "")
       setNotes(entryData.notes || "")
       setIsDamaged(entryData.is_damaged || false)
       setDamageDescription("")

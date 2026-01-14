@@ -188,7 +188,7 @@ export function EntryPDF({ entry, logoUrl }: EntryPDFProps) {
           <View style={styles.row}>
             <Text style={styles.label}>Weight:</Text>
             <Text style={styles.value}>
-              {entry.total_weight_lbs ? `${entry.total_weight_lbs} lbs` : 'N/A'}
+              {entry.total_weight ? `${entry.total_weight} lbs` : 'N/A'}
             </Text>
           </View>
           <View style={styles.row}>

@@ -84,7 +84,7 @@ export default function EntryNotification({
           <strong>Quantity:</strong> {entry.total_packages} {entry.package_types?.name || entry.package_type || 'packages'}
         </Text>
         <Text style={detailRow}>
-          <strong>Weight:</strong> {entry.total_weight_lbs ? `${entry.total_weight_lbs} lbs` : 'N/A'}
+          <strong>Weight:</strong> {entry.total_weight ? `${entry.total_weight} lbs` : 'N/A'}
         </Text>
         <Text style={detailRow}>
           <strong>Entry Date:</strong> {formatDate(entry.entry_date)}
