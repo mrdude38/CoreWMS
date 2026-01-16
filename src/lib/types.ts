@@ -147,7 +147,7 @@ export interface EntryAttachment {
   id: string
   entry_id: string
   file_name: string
-  blob_path: string  // Path/key in Vercel Blob storage
+  blob_url: string  // Full URL in Vercel Blob storage
   file_type?: string
   file_size?: number
   created_at: string

@@ -1,10 +1,10 @@
 -- Entry attachments table for storing file metadata
--- Files are stored in Vercel Blob storage, only the blob path/key is stored in the database
+-- Files are stored in Vercel Blob storage, the full blob URL is stored in the database
 CREATE TABLE IF NOT EXISTS entry_attachments (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   entry_id UUID NOT NULL REFERENCES entries(id) ON DELETE CASCADE,
   file_name TEXT NOT NULL,
-  blob_path TEXT NOT NULL,  -- Path/key in Vercel Blob storage (not the full URL)
+  blob_url TEXT NOT NULL,  -- Full URL in Vercel Blob storage
   file_type TEXT,
   file_size INTEGER,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
@@ -49,4 +49,4 @@ CREATE POLICY "Admins and managers can delete entry attachments"
   );
 
 COMMENT ON TABLE entry_attachments IS 'File attachments for warehouse entries, stored in Vercel Blob';
-COMMENT ON COLUMN entry_attachments.blob_path IS 'Path/key in Vercel Blob storage (use with BLOB_READ_WRITE_TOKEN to construct full URL)';
+COMMENT ON COLUMN entry_attachments.blob_url IS 'Full URL to the file in Vercel Blob storage';

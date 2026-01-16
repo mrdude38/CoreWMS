@@ -196,16 +196,22 @@ export default function Page() {
           })
 
           if (uploadResponse.ok) {
-            const { blobPath } = await uploadResponse.json()
+            const { url: blobUrl } = await uploadResponse.json()
 
-            // Save attachment record with blob_path (not the full URL)
-            await supabase.from("entry_attachments").insert({
+            // Save attachment record with full blob URL
+            const { error: attachmentError } = await supabase.from("entry_attachments").insert({
               entry_id: entry.id,
               file_name: file.name,
-              blob_path: blobPath,
+              blob_url: blobUrl,
               file_type: file.type,
               file_size: file.size,
             })
+
+            if (attachmentError) {
+              console.error("Error saving attachment record:", attachmentError)
+            }
+          } else {
+            console.error("Upload failed:", await uploadResponse.text())
           }
         }
       }

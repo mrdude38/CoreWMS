@@ -4,7 +4,6 @@ import { getServerAbility } from '@/lib/casl/server-ability'
 import { sendEmail, shouldSendNotification } from '@/lib/resend/service'
 import { renderToBuffer } from '@react-pdf/renderer'
 import { EntryPDF } from '@/lib/pdf/entry-pdf'
-import { getBlobUrl } from '@/lib/blob/utils'
 import type { EmailAttachment } from '@/lib/resend/types'
 
 export async function POST(request: NextRequest) {
@@ -95,12 +94,10 @@ export async function POST(request: NextRequest) {
     if (entryAttachments && entryAttachments.length > 0) {
       for (const attachment of entryAttachments) {
         try {
-          // Construct the full URL from the blob_path stored in the database
-          const blobUrl = getBlobUrl(attachment.blob_path)
-          if (DEBUG) console.log('📧 Fetching attachment from Vercel Blob:', blobUrl)
+          if (DEBUG) console.log('📧 Fetching attachment from Vercel Blob:', attachment.blob_url)
 
-          // Fetch file from Vercel Blob storage
-          const response = await fetch(blobUrl)
+          // Fetch file from Vercel Blob storage using the stored URL
+          const response = await fetch(attachment.blob_url)
 
           if (response.ok) {
             const arrayBuffer = await response.arrayBuffer()

@@ -1,13 +1,14 @@
 import { Suspense } from "react"
 import Link from "next/link"
 import { notFound } from "next/navigation"
-import { ArrowLeft } from "lucide-react"
+import { ArrowLeft, Download, FileText, ImageIcon, File } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { createClient } from "@/lib/supabase/server"
 import { requirePermission } from "@/lib/casl/server-guards"
 import { EntryActions } from "./entry-actions"
+import type { EntryAttachment } from "@/lib/types"
 
 interface PageProps {
   params: Promise<{ id: string }>
@@ -69,6 +70,15 @@ async function getEntry(id: string) {
       (entry as any).users = user
     }
   }
+
+  // Fetch attachments
+  const { data: attachments } = await supabase
+    .from("entry_attachments")
+    .select("*")
+    .eq("entry_id", id)
+    .order("created_at", { ascending: false })
+
+  ;(entry as any).attachments = attachments || []
 
   return entry
 }
@@ -212,6 +222,48 @@ async function EntryDetail({ id }: { id: string }) {
             </CardHeader>
             <CardContent>
               <p className="text-base whitespace-pre-wrap">{entry.notes}</p>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Attachments */}
+        {(entry as any).attachments && (entry as any).attachments.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Attachments</CardTitle>
+              <CardDescription>{(entry as any).attachments.length} file(s) attached</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {(entry as any).attachments.map((attachment: EntryAttachment) => {
+                  const isImage = attachment.file_type?.startsWith("image/")
+                  const isPdf = attachment.file_type === "application/pdf"
+                  const FileIcon = isImage ? ImageIcon : isPdf ? FileText : File
+
+                  return (
+                    <div
+                      key={attachment.id}
+                      className="flex items-center justify-between rounded-md border bg-muted/50 p-3"
+                    >
+                      <div className="flex items-center gap-3">
+                        <FileIcon className="h-5 w-5 text-muted-foreground" />
+                        <div>
+                          <p className="text-sm font-medium">{attachment.file_name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {attachment.file_size ? `${(attachment.file_size / 1024).toFixed(1)} KB` : ""}
+                          </p>
+                        </div>
+                      </div>
+                      <Button asChild variant="outline" size="sm">
+                        <a href={attachment.blob_url} target="_blank" rel="noopener noreferrer" download>
+                          <Download className="mr-2 h-4 w-4" />
+                          Download
+                        </a>
+                      </Button>
+                    </div>
+                  )
+                })}
+              </div>
             </CardContent>
           </Card>
         )}
