@@ -196,13 +196,13 @@ export default function Page() {
           })
 
           if (uploadResponse.ok) {
-            const { url } = await uploadResponse.json()
+            const { blobPath } = await uploadResponse.json()
 
-            // Save attachment record
+            // Save attachment record with blob_path (not the full URL)
             await supabase.from("entry_attachments").insert({
               entry_id: entry.id,
               file_name: file.name,
-              file_url: url,
+              blob_path: blobPath,
               file_type: file.type,
               file_size: file.size,
             })

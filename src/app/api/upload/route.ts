@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { put } from '@vercel/blob'
 import { createClient } from '@/lib/supabase/server'
 
 export async function POST(request: NextRequest) {
@@ -17,27 +18,19 @@ export async function POST(request: NextRequest) {
     }
 
     const file = await request.blob()
-    const buffer = Buffer.from(await file.arrayBuffer())
 
-    // Upload to Supabase Storage
-    const { data, error } = await supabase.storage
-      .from('entry-attachments')
-      .upload(filename, buffer, {
-        contentType: file.type || 'application/octet-stream',
-        upsert: true,
-      })
+    // Upload to Vercel Blob storage
+    const blob = await put(filename, file, {
+      access: 'public',
+      addRandomSuffix: false,
+    })
 
-    if (error) {
-      console.error('Upload error:', error)
-      return NextResponse.json({ error: error.message }, { status: 500 })
-    }
-
-    // Get public URL
-    const { data: urlData } = supabase.storage
-      .from('entry-attachments')
-      .getPublicUrl(data.path)
-
-    return NextResponse.json({ url: urlData.publicUrl })
+    // Return both the full URL and the pathname (blob_path)
+    // The blob_path is what should be stored in the database
+    return NextResponse.json({
+      url: blob.url,
+      blobPath: blob.pathname
+    })
   } catch (error) {
     console.error('Upload error:', error)
     return NextResponse.json(
