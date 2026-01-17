@@ -183,13 +183,15 @@ export default function Page() {
 
       const revisionData = {
         entry_id: entryId,
-        invoice_number: invoiceNumber,
-        reviewer_id: profile?.id,
-        review_time_minutes: reviewTimeMinutes,
+        invoice_number: invoiceNumber || null,
+        reviewer_id: profile?.id || null,
+        review_time_minutes: reviewTimeMinutes || 0,
         total_weight_kg: calculateTotalWeight(),
-        num_bultos: numBultos,
-        num_tarimas: numTarimas,
+        num_bultos: numBultos || 0,
+        num_tarimas: numTarimas || 0,
       }
+
+      console.log("Saving revision data:", revisionData)
 
       let revisionId = revision?.id
 
@@ -200,13 +202,20 @@ export default function Page() {
           .update(revisionData)
           .eq("id", revision.id)
 
-        if (error) throw error
+        if (error) {
+          console.error("Error updating revision:", error)
+          throw error
+        }
 
         // Delete existing items and re-insert
-        await supabase
+        const { error: deleteError } = await supabase
           .from("entry_revision_items")
           .delete()
           .eq("revision_id", revision.id)
+
+        if (deleteError) {
+          console.error("Error deleting items:", deleteError)
+        }
       } else {
         // Create new revision
         const { data, error } = await supabase
@@ -215,43 +224,56 @@ export default function Page() {
           .select()
           .single()
 
-        if (error) throw error
+        if (error) {
+          console.error("Error inserting revision:", error)
+          throw error
+        }
+        console.log("Revision created:", data)
         revisionId = data.id
       }
 
       // Insert items
-      if (items.length > 0) {
+      if (items.length > 0 && revisionId) {
         const itemsToInsert = items.map((item) => ({
           revision_id: revisionId,
-          partida_number: item.partida_number,
-          description: item.description,
-          brand: item.brand,
-          model: item.model,
-          part_number: item.part_number,
-          serial_number: item.serial_number,
-          origin: item.origin,
-          quantity: item.quantity,
-          unit_of_measure: item.unit_of_measure,
-          weight_kg: item.weight_kg,
+          partida_number: item.partida_number || 1,
+          description: item.description || null,
+          brand: item.brand || null,
+          model: item.model || null,
+          part_number: item.part_number || null,
+          serial_number: item.serial_number || null,
+          origin: item.origin || null,
+          quantity: item.quantity || 0,
+          unit_of_measure: item.unit_of_measure || null,
+          weight_kg: item.weight_kg || 0,
         }))
+
+        console.log("Inserting items:", itemsToInsert)
 
         const { error: itemsError } = await supabase
           .from("entry_revision_items")
           .insert(itemsToInsert)
 
-        if (itemsError) throw itemsError
+        if (itemsError) {
+          console.error("Error inserting items:", itemsError)
+          throw itemsError
+        }
       }
 
       // Update entry to mark revision as complete
-      await supabase
+      const { error: entryError } = await supabase
         .from("entries")
         .update({ has_revision: true })
         .eq("id", entryId)
 
+      if (entryError) {
+        console.error("Error updating entry:", entryError)
+      }
+
       router.push(`/operations/inspections/${entryId}`)
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error saving revision:", err)
-      alert("Error saving revision")
+      alert(`Error saving revision: ${err?.message || "Unknown error"}`)
     } finally {
       setSaving(false)
     }
