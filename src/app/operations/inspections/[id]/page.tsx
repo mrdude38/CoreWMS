@@ -1,9 +1,9 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
 import { useRouter, useParams } from "next/navigation"
-import { ArrowLeft, CheckCircle2, XCircle } from "lucide-react"
+import { ArrowLeft, CheckCircle2, XCircle, Upload, FileText, ClipboardList } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -17,9 +17,11 @@ export default function Page() {
   const params = useParams()
   const entryId = params.id as string
   const ability = useAbility()
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [uploading, setUploading] = useState(false)
   const [entry, setEntry] = useState<any>(null)
 
   // Inspection states
@@ -83,6 +85,57 @@ export default function Page() {
     }
 
     setSaving(false)
+  }
+
+  const handleUploadInvoice = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    setUploading(true)
+
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('entry_id', entryId)
+      formData.append('folder', `invoices/${entryId}`)
+
+      const response = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      })
+
+      if (!response.ok) {
+        throw new Error('Upload failed')
+      }
+
+      const { url } = await response.json()
+
+      // Update entry with invoice URL and mark has_invoice as true
+      const supabase = createClient()
+      const { error } = await supabase
+        .from("entries")
+        .update({
+          invoice_url: url,
+          has_invoice: true,
+        })
+        .eq("id", entryId)
+
+      if (error) throw error
+
+      // Update local state
+      setEntry({ ...entry, invoice_url: url })
+      setHasInvoice(true)
+
+      alert("Invoice uploaded successfully")
+    } catch (err) {
+      console.error("Error uploading invoice:", err)
+      alert("Error uploading invoice")
+    } finally {
+      setUploading(false)
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
+    }
   }
 
   if (loading) {
@@ -192,14 +245,43 @@ export default function Page() {
                       Factura
                     </Label>
                     <p className="text-sm text-muted-foreground">Entry has associated invoice documentation</p>
+                    {entry.invoice_url && (
+                      <a
+                        href={entry.invoice_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm text-primary hover:underline flex items-center gap-1 mt-1"
+                      >
+                        <FileText className="h-3 w-3" />
+                        View uploaded invoice
+                      </a>
+                    )}
                   </div>
                 </div>
-                <Checkbox
-                  id="has_invoice"
-                  checked={hasInvoice}
-                  onCheckedChange={(checked) => setHasInvoice(checked === true)}
-                  className="h-6 w-6"
-                />
+                <div className="flex items-center gap-2">
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleUploadInvoice}
+                    accept=".pdf,.jpg,.jpeg,.png"
+                    className="hidden"
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploading}
+                  >
+                    <Upload className="mr-2 h-4 w-4" />
+                    {uploading ? "Uploading..." : "Upload"}
+                  </Button>
+                  <Checkbox
+                    id="has_invoice"
+                    checked={hasInvoice}
+                    onCheckedChange={(checked) => setHasInvoice(checked === true)}
+                    className="h-6 w-6"
+                  />
+                </div>
               </div>
 
               {/* Revision */}
@@ -217,12 +299,22 @@ export default function Page() {
                     <p className="text-sm text-muted-foreground">Entry has been physically reviewed</p>
                   </div>
                 </div>
-                <Checkbox
-                  id="has_revision"
-                  checked={hasRevision}
-                  onCheckedChange={(checked) => setHasRevision(checked === true)}
-                  className="h-6 w-6"
-                />
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => router.push(`/operations/inspections/${entryId}/revision`)}
+                  >
+                    <ClipboardList className="mr-2 h-4 w-4" />
+                    {hasRevision ? "View Revision" : "Start Revision"}
+                  </Button>
+                  <Checkbox
+                    id="has_revision"
+                    checked={hasRevision}
+                    onCheckedChange={(checked) => setHasRevision(checked === true)}
+                    className="h-6 w-6"
+                  />
+                </div>
               </div>
 
               {/* Clasificacion */}

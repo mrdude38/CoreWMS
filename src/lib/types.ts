@@ -51,6 +51,7 @@ export interface Entry {
   has_invoice: boolean
   has_revision: boolean
   has_classification: boolean
+  invoice_url?: string
   created_at: string
   updated_at: string
   clients?: Client
@@ -187,4 +188,37 @@ export interface EmailLog {
   metadata?: Record<string, any>
   sent_at?: string
   created_at: string
+}
+
+// Entry Revision types
+export interface EntryRevision {
+  id: string
+  entry_id: string
+  invoice_number?: string
+  reviewer_id?: string
+  review_time_minutes: number
+  total_weight_kg: number
+  num_bultos: number
+  num_tarimas: number
+  created_at: string
+  updated_at: string
+  entries?: Entry
+  profiles?: UserProfile
+}
+
+export interface EntryRevisionItem {
+  id: string
+  revision_id: string
+  partida_number: number
+  description?: string
+  brand?: string
+  model?: string
+  part_number?: string
+  serial_number?: string
+  origin?: string
+  quantity: number
+  unit_of_measure?: string
+  weight_kg: number
+  created_at: string
+  updated_at: string
 }
