@@ -350,10 +350,12 @@ export default function Page() {
                 </div>
               </div>
 
-              {/* Carrier */}
+              {/* Carrier - Required */}
               <div className="grid gap-2">
-                <Label htmlFor="carrier_id">Carrier</Label>
-                <Select name="carrier_id">
+                <Label htmlFor="carrier_id">
+                  Carrier <span className="text-destructive">*</span>
+                </Label>
+                <Select name="carrier_id" required>
                   <SelectTrigger>
                     <SelectValue placeholder="Select carrier" />
                   </SelectTrigger>
@@ -383,9 +385,11 @@ export default function Page() {
                 </Select>
               </div>
 
-              {/* Total Packages */}
+              {/* Total Packages - Required */}
               <div className="grid gap-2">
-                <Label htmlFor="total_packages">Total Packages</Label>
+                <Label htmlFor="total_packages">
+                  Total Packages <span className="text-destructive">*</span>
+                </Label>
                 <Input
                   id="total_packages"
                   name="total_packages"
@@ -393,13 +397,16 @@ export default function Page() {
                   placeholder="0"
                   defaultValue="0"
                   min="0"
+                  required
                 />
               </div>
 
-              {/* Package Type */}
+              {/* Package Type - Required */}
               <div className="grid gap-2">
-                <Label htmlFor="package_type">Package Type</Label>
-                <Select name="package_type">
+                <Label htmlFor="package_type">
+                  Package Type <span className="text-destructive">*</span>
+                </Label>
+                <Select name="package_type" required>
                   <SelectTrigger>
                     <SelectValue placeholder="Select package type" />
                   </SelectTrigger>
@@ -413,9 +420,11 @@ export default function Page() {
                 </Select>
               </div>
 
-              {/* Total Weight */}
+              {/* Total Weight - Required */}
               <div className="grid gap-2">
-                <Label htmlFor="total_weight_lbs">Total Weight (lbs)</Label>
+                <Label htmlFor="total_weight_lbs">
+                  Total Weight (lbs) <span className="text-destructive">*</span>
+                </Label>
                 <Input
                   id="total_weight_lbs"
                   name="total_weight_lbs"
@@ -423,13 +432,16 @@ export default function Page() {
                   step="0.01"
                   placeholder="0.00"
                   min="0"
+                  required
                 />
               </div>
 
-              {/* Received By */}
+              {/* Received By - Required */}
               <div className="grid gap-2">
-                <Label htmlFor="received_by">Received By</Label>
-                <Select name="received_by">
+                <Label htmlFor="received_by">
+                  Received By <span className="text-destructive">*</span>
+                </Label>
+                <Select name="received_by" required>
                   <SelectTrigger>
                     <SelectValue placeholder="Select user" />
                   </SelectTrigger>
@@ -444,10 +456,12 @@ export default function Page() {
               </div>
             </div>
 
-            {/* Description - Full width */}
+            {/* Description - Required, Full width */}
             <div className="grid gap-2">
-              <Label htmlFor="description">Description</Label>
-              <Textarea id="description" name="description" placeholder="Merchandise description..." rows={2} />
+              <Label htmlFor="description">
+                Description <span className="text-destructive">*</span>
+              </Label>
+              <Textarea id="description" name="description" placeholder="Merchandise description..." rows={2} required />
             </div>
 
             {/* Notes - Full width */}

@@ -353,10 +353,12 @@ export default function Page() {
                 </div>
               </div>
 
-              {/* Carrier */}
+              {/* Carrier - Required */}
               <div className="grid gap-2">
-                <Label htmlFor="carrier_id">Carrier</Label>
-                <Select value={selectedCarrierId} onValueChange={setSelectedCarrierId}>
+                <Label htmlFor="carrier_id">
+                  Carrier <span className="text-destructive">*</span>
+                </Label>
+                <Select required value={selectedCarrierId} onValueChange={setSelectedCarrierId}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select carrier" />
                   </SelectTrigger>
@@ -386,9 +388,11 @@ export default function Page() {
                 </Select>
               </div>
 
-              {/* Total Packages */}
+              {/* Total Packages - Required */}
               <div className="grid gap-2">
-                <Label htmlFor="total_packages">Total Packages</Label>
+                <Label htmlFor="total_packages">
+                  Total Packages <span className="text-destructive">*</span>
+                </Label>
                 <Input
                   id="total_packages"
                   type="number"
@@ -396,13 +400,16 @@ export default function Page() {
                   value={totalPackages}
                   onChange={(e) => setTotalPackages(e.target.value)}
                   min="0"
+                  required
                 />
               </div>
 
-              {/* Package Type */}
+              {/* Package Type - Required */}
               <div className="grid gap-2">
-                <Label htmlFor="package_type">Package Type</Label>
-                <Select value={selectedPackageTypeId} onValueChange={setSelectedPackageTypeId}>
+                <Label htmlFor="package_type">
+                  Package Type <span className="text-destructive">*</span>
+                </Label>
+                <Select required value={selectedPackageTypeId} onValueChange={setSelectedPackageTypeId}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select package type" />
                   </SelectTrigger>
@@ -416,9 +423,11 @@ export default function Page() {
                 </Select>
               </div>
 
-              {/* Total Weight */}
+              {/* Total Weight - Required */}
               <div className="grid gap-2">
-                <Label htmlFor="total_weight_lbs">Total Weight (lbs)</Label>
+                <Label htmlFor="total_weight_lbs">
+                  Total Weight (lbs) <span className="text-destructive">*</span>
+                </Label>
                 <Input
                   id="total_weight_lbs"
                   type="number"
@@ -427,13 +436,16 @@ export default function Page() {
                   value={totalWeight}
                   onChange={(e) => setTotalWeight(e.target.value)}
                   min="0"
+                  required
                 />
               </div>
 
-              {/* Received By */}
+              {/* Received By - Required */}
               <div className="grid gap-2">
-                <Label htmlFor="received_by">Received By</Label>
-                <Select value={selectedReceivedBy} onValueChange={setSelectedReceivedBy}>
+                <Label htmlFor="received_by">
+                  Received By <span className="text-destructive">*</span>
+                </Label>
+                <Select required value={selectedReceivedBy} onValueChange={setSelectedReceivedBy}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select user" />
                   </SelectTrigger>
@@ -448,15 +460,18 @@ export default function Page() {
               </div>
             </div>
 
-            {/* Description - Full width */}
+            {/* Description - Required, Full width */}
             <div className="grid gap-2">
-              <Label htmlFor="description">Description</Label>
+              <Label htmlFor="description">
+                Description <span className="text-destructive">*</span>
+              </Label>
               <Textarea
                 id="description"
                 placeholder="Merchandise description..."
                 rows={2}
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
+                required
               />
             </div>
 

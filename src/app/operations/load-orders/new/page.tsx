@@ -150,7 +150,9 @@ export default function Page() {
         })
       )
 
-      setEntries(entriesWithAvailability)
+      // Filter out entries with no available inventory
+      const availableEntries = entriesWithAvailability.filter(entry => entry.packages_available > 0)
+      setEntries(availableEntries)
     }
   }
 
@@ -225,6 +227,12 @@ export default function Page() {
 
     if (!selectedCarrier) {
       setError("Carrier is required")
+      setLoading(false)
+      return
+    }
+
+    if (!pedimentoInvoice.trim()) {
+      setError("Pedimento / Invoice Number is required")
       setLoading(false)
       return
     }
@@ -374,12 +382,15 @@ export default function Page() {
               </div>
 
               <div className="grid gap-2">
-                <Label htmlFor="pedimento_invoice_number">Pedimento / Invoice Number</Label>
+                <Label htmlFor="pedimento_invoice_number">
+                  Pedimento / Invoice Number <span className="text-destructive">*</span>
+                </Label>
                 <Input
                   id="pedimento_invoice_number"
                   value={pedimentoInvoice}
                   onChange={(e) => setPedimentoInvoice(e.target.value)}
                   placeholder="Enter pedimento or invoice number"
+                  required
                 />
               </div>
             </div>

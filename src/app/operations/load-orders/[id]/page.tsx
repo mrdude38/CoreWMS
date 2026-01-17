@@ -147,7 +147,7 @@ export default function Page() {
           <ProtectedEditButton
             href={`/operations/load-orders/${loadOrder.id}/edit`}
             label="Edit"
-            subject="LoadOrder"
+            subject={loadOrder.status === 'salida' ? 'Exit' : 'LoadOrder'}
           />
           <ProtectedDeleteButton
             onDelete={() => {
@@ -156,7 +156,7 @@ export default function Page() {
               }
             }}
             label="Delete"
-            subject="LoadOrder"
+            subject={loadOrder.status === 'salida' ? 'Exit' : 'LoadOrder'}
           />
         </div>
       </div>

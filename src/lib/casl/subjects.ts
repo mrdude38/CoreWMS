@@ -5,6 +5,7 @@ export type Subjects =
   | 'Catalog'
   | 'Entry'
   | 'LoadOrder'
+  | 'Exit'  // Load orders with status "salida" - only admin can edit/delete
   | 'Report'
   | 'User'
   | 'Email'

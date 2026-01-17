@@ -24,11 +24,7 @@ export default function Page() {
   const [loadOrder, setLoadOrder] = useState<any>(null)
   const [selectedStatus, setSelectedStatus] = useState<string>("pendiente")
 
-  useEffect(() => {
-    if (!ability.can('update', 'LoadOrder')) {
-      router.push('/')
-    }
-  }, [ability, router])
+  // Permission check is done after data loads to check if it's an exit
 
   useEffect(() => {
     loadData()
@@ -52,6 +48,17 @@ export default function Page() {
     if (orderData) {
       setLoadOrder(orderData)
       setSelectedStatus(orderData.status)
+
+      // Check permissions - exits (status=salida) can only be edited by admin
+      const isExit = orderData.status === 'salida'
+      const canEdit = isExit
+        ? ability.can('update', 'Exit')
+        : ability.can('update', 'LoadOrder')
+
+      if (!canEdit) {
+        router.push('/')
+        return
+      }
     }
 
     setLoadingData(false)
