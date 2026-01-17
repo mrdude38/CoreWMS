@@ -264,7 +264,7 @@ export default function Page() {
     }
 
     // Prepare data for export
-    const exportData = items.map((item) => ({
+    const exportData: Record<string, string | number>[] = items.map((item) => ({
       "# Partida": item.partida_number,
       "Descripcion": item.description,
       "Marca": item.brand,
