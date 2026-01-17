@@ -1,5 +1,5 @@
 "use client"
-import { BarChart3, Home, Package, PackageOpen, TruckIcon, Users, Building2, Truck, Settings, LogOut, User } from "lucide-react"
+import { BarChart3, Home, Package, PackageOpen, TruckIcon, Users, Building2, Truck, Settings, LogOut, User, ClipboardCheck } from "lucide-react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { useAuth } from "@/lib/auth/auth-context"
@@ -50,6 +50,11 @@ const menuItems = {
       title: "Shipments",
       icon: Package,
       url: "/operations/shipments",
+    },
+    {
+      title: "Inspections",
+      icon: ClipboardCheck,
+      url: "/operations/inspections",
     },
   ],
   catalogs: [

@@ -47,6 +47,10 @@ export interface Entry {
   notes?: string
   is_damaged: boolean
   po_number?: string
+  // Inspection fields
+  has_invoice: boolean
+  has_revision: boolean
+  has_classification: boolean
   created_at: string
   updated_at: string
   clients?: Client
