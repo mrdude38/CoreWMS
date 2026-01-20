@@ -2,17 +2,23 @@ import { Suspense } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { createClient } from "@/lib/supabase/server"
 import type { Client } from "@/lib/types"
 import { requirePermission } from "@/lib/casl/server-guards"
 import { ProtectedNewButton } from "@/components/protected-new-button"
+import { createServerServices } from "@/lib/api/server"
 
 async function getClients() {
   await requirePermission('read', 'Catalog')
-  const supabase = await createClient()
-  const { data } = await supabase.from("clients").select("*").order("name", { ascending: true })
-
-  return (data || []) as Client[]
+  
+  const { clients } = createServerServices()
+  const response = await clients.getAll()
+  
+  if (response.error) {
+    console.error('Failed to fetch clients:', response.error)
+    return []
+  }
+  
+  return (response.data || []) as Client[]
 }
 
 async function ClientsContent() {

@@ -7,12 +7,14 @@ import type { UserProfile } from "@/lib/types"
 import { defineAbilityFor } from "@/lib/casl/factory"
 import { AbilityContext } from "@/lib/casl/ability-context"
 import type { AppAbility } from "@/lib/casl/subjects"
+import { api } from "@/lib/api"
 
 interface AuthContextType {
   user: User | null
   profile: UserProfile | null
   loading: boolean
   signOut: () => Promise<void>
+  refreshProfile: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -30,7 +32,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null)
       if (session?.user) {
-        loadProfile(session.user.id)
+        loadProfile()
       } else {
         setLoading(false)
       }
@@ -42,7 +44,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null)
       if (session?.user) {
-        loadProfile(session.user.id)
+        loadProfile()
       } else {
         setProfile(null)
         setAbility(defineAbilityFor(null))
@@ -53,19 +55,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => subscription.unsubscribe()
   }, [])
 
-  const loadProfile = async (userId: string) => {
+  const loadProfile = async () => {
     try {
-      const supabase = createClient()
-      const { data, error } = await supabase
-        .from('user_profiles')
-        .select('*')
-        .eq('id', userId)
-        .single()
+      // Load profile from backend API
+      const response = await api.get<{
+        user: { id: string; email: string };
+        profile: UserProfile;
+      }>('/me')
 
-      if (error) throw error
-      const userProfile = data as UserProfile
-      setProfile(userProfile)
-      setAbility(defineAbilityFor(userProfile))
+      if (response.error) {
+        // Fallback to Supabase direct query if backend fails
+        const supabase = createClient()
+        const { data: { user: currentUser } } = await supabase.auth.getUser()
+        
+        if (currentUser) {
+          const { data, error } = await supabase
+            .from('user_profiles')
+            .select('*')
+            .eq('id', currentUser.id)
+            .single()
+
+          if (!error && data) {
+            const userProfile = data as UserProfile
+            setProfile(userProfile)
+            setAbility(defineAbilityFor(userProfile))
+            return
+          }
+        }
+        
+        throw new Error(response.error)
+      }
+
+      if (response.data?.profile) {
+        setProfile(response.data.profile)
+        setAbility(defineAbilityFor(response.data.profile))
+      }
     } catch (error) {
       console.error('Error loading profile:', error)
       setProfile(null)
@@ -73,6 +97,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setLoading(false)
     }
+  }
+
+  const refreshProfile = async () => {
+    await loadProfile()
   }
 
   const signOut = async () => {
@@ -83,6 +111,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(null)
       setProfile(null)
       setAbility(defineAbilityFor(null))
+
+      // Call backend signout
+      try {
+        await api.post('/auth/signout')
+      } catch {
+        // Ignore backend signout errors
+      }
 
       // Sign out from Supabase (this clears the auth cookies)
       await supabase.auth.signOut({ scope: 'local' })
@@ -99,7 +134,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, signOut }}>
+    <AuthContext.Provider value={{ user, profile, loading, signOut, refreshProfile }}>
       <AbilityContext.Provider value={ability}>
         {children}
       </AbilityContext.Provider>

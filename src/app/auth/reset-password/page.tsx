@@ -97,6 +97,9 @@ export default function ResetPasswordPage() {
 
       if (updateError) throw updateError
 
+      // Sign out to clear the recovery session cookies (prevents 431 error)
+      await supabase.auth.signOut()
+
       // Redirect to login after successful password reset
       router.push('/auth/login?message=Password updated successfully')
     } catch (err) {

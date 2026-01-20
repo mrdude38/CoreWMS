@@ -3,33 +3,28 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { createClient } from "@/lib/supabase/server"
 import type { LoadOrder } from "@/lib/types"
 import { requirePermission } from "@/lib/casl/server-guards"
 import { ProtectedNewButton } from "@/components/protected-new-button"
-import { getClientFilter } from "@/lib/casl/client-filter"
+import { createServerServices } from "@/lib/api/server"
 
 async function getLoadOrders() {
   await requirePermission('read', 'LoadOrder')
-  const supabase = await createClient()
 
-  // Get client filter if applicable
-  const clientId = await getClientFilter()
-
-  let query = supabase
-    .from("load_orders")
-    .select("*, clients(name), carriers(name)")
-    .neq("status", "salida") // Exclude "salida" - they appear in Exits page
-    .order("created_at", { ascending: false })
-
-  // Apply client filter for client users
-  if (clientId) {
-    query = query.eq('client_id', clientId)
+  const { loadOrders } = createServerServices()
+  const response = await loadOrders.getAll({ page: 1, page_size: 50 })
+  
+  if (response.error) {
+    console.error('Failed to fetch load orders:', response.error)
+    return []
   }
 
-  const { data } = await query
-
-  return (data || []) as LoadOrder[]
+  // Handle both paginated response and direct array
+  if (Array.isArray(response.data)) {
+    return response.data as LoadOrder[]
+  }
+  
+  return (response.data?.data || response.data || []) as LoadOrder[]
 }
 
 async function LoadOrdersContent() {
@@ -37,10 +32,12 @@ async function LoadOrdersContent() {
 
   const getStatusVariant = (status: string) => {
     switch (status) {
-      case "salida":
+      case "completed":
         return "default"
-      case "pendiente":
+      case "in_progress":
         return "secondary"
+      case "cancelled":
+        return "destructive"
       default:
         return "outline"
     }
@@ -85,10 +82,16 @@ async function LoadOrdersContent() {
                       <Badge variant={getStatusVariant(order.status)}>{order.status}</Badge>
                     </div>
                     <p className="text-sm text-muted-foreground">
-                      {(order as any).clients?.name || "No client"} • {(order as any).carriers?.name || "No carrier"}
+                      {order.clients?.name || (order as any).client?.name || "No client"} • {order.carriers?.name || (order as any).carrier?.name || "No carrier"}
                     </p>
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
                       <span>{order.total_packages} packages</span>
+                      {order.destination && (
+                        <>
+                          <span>•</span>
+                          <span>{order.destination}</span>
+                        </>
+                      )}
                     </div>
                   </div>
                   <Button asChild variant="outline" size="sm">

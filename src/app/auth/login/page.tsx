@@ -119,7 +119,7 @@ function LoginForm() {
             />
           </div>
 
-          <div className="text-sm">
+          <div className="flex items-center justify-between text-sm">
             <Link
               href="/auth/forgot-password"
               className="text-primary hover:underline"
@@ -129,7 +129,7 @@ function LoginForm() {
           </div>
         </CardContent>
 
-        <CardFooter>
+        <CardFooter className="flex flex-col gap-4">
           <Button type="submit" className="w-full" disabled={loading}>
             {loading ? (
               "Logging in..."
@@ -140,6 +140,12 @@ function LoginForm() {
               </>
             )}
           </Button>
+          <div className="text-center text-sm text-muted-foreground">
+            Don't have an account?{" "}
+            <Link href="/auth/signup" className="text-primary hover:underline font-medium">
+              Sign up
+            </Link>
+          </div>
         </CardFooter>
       </form>
     </Card>

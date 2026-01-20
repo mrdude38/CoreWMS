@@ -1,26 +1,49 @@
 import { Suspense } from "react"
 import Link from "next/link"
-import { Plus } from "lucide-react"
+import { Plus, Mail, CheckCircle2, XCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { createClient } from "@/lib/supabase/server"
-import type { UserProfile } from "@/lib/types"
+import { serverApi } from "@/lib/api/server"
 import { requireAdmin } from "@/lib/casl/server-guards"
 
-async function getUserProfiles() {
-  // Use CASL guard instead of manual check
+interface UserWithEmail {
+  id: string
+  email: string
+  email_confirmed: boolean
+  full_name: string
+  role: 'admin' | 'manager' | 'operator' | 'viewer' | 'client'
+  client_id: string | null
+  client?: {
+    id: string
+    name: string
+  }
+  is_active: boolean
+  last_sign_in: string | null
+  created_at: string
+  updated_at: string
+}
+
+interface UsersResponse {
+  data: UserWithEmail[]
+  total: number
+  page: number
+  page_size: number
+  total_pages: number
+}
+
+async function getUserProfiles(): Promise<UserWithEmail[]> {
+  // Use CASL guard to ensure admin access
   await requireAdmin()
 
-  const supabase = await createClient()
+  const response = await serverApi.get<UsersResponse>('/admin/users')
+  
+  if (response.error) {
+    console.error('Failed to fetch users:', response.error)
+    return []
+  }
 
-  // Get all user profiles with client relation
-  const { data } = await supabase
-    .from('user_profiles')
-    .select('*, clients(name)')
-    .order('created_at', { ascending: false })
-
-  return (data || []) as UserProfile[]
+  return response.data?.data || []
 }
 
 async function UsersContent() {
@@ -41,6 +64,11 @@ async function UsersContent() {
     return role.charAt(0).toUpperCase() + role.slice(1)
   }
 
+  const formatDate = (dateString: string | null) => {
+    if (!dateString) return 'Never'
+    return new Date(dateString).toLocaleDateString()
+  }
+
   return (
     <>
       <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -49,7 +77,7 @@ async function UsersContent() {
           <p className="text-muted-foreground">Manage system users and their roles</p>
         </div>
         <Button asChild>
-          <Link href="/auth/signup">
+          <Link href="/admin/users/new">
             <Plus className="mr-2 h-4 w-4" />
             Add User
           </Link>
@@ -75,7 +103,15 @@ async function UsersContent() {
                 >
                   <div className="space-y-1">
                     <p className="font-medium">{user.full_name}</p>
-                    <p className="text-sm text-muted-foreground">ID: {user.id.slice(0, 8)}...</p>
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Mail className="h-3 w-3" />
+                      <span>{user.email}</span>
+                      {user.email_confirmed ? (
+                        <CheckCircle2 className="h-3 w-3 text-green-600" title="Email verified" />
+                      ) : (
+                        <XCircle className="h-3 w-3 text-amber-500" title="Email not verified" />
+                      )}
+                    </div>
                     <div className="flex gap-2 items-center">
                       <Badge variant={getRoleBadgeVariant(user.role)}>
                         {getRoleLabel(user.role)}
@@ -84,15 +120,15 @@ async function UsersContent() {
                         <Badge variant="outline" className="text-red-600">Inactive</Badge>
                       )}
                     </div>
-                    {user.clients && (
+                    {user.client && (
                       <p className="text-sm text-muted-foreground">
-                        Client: {(user.clients as any).name}
+                        Client: {user.client.name}
                       </p>
                     )}
                   </div>
-                  <div className="text-sm text-muted-foreground">
-                    <p>Created: {new Date(user.created_at).toLocaleDateString()}</p>
-                    <p>Updated: {new Date(user.updated_at).toLocaleDateString()}</p>
+                  <div className="text-sm text-muted-foreground text-right">
+                    <p>Created: {formatDate(user.created_at)}</p>
+                    <p>Last login: {formatDate(user.last_sign_in)}</p>
                   </div>
                 </div>
               ))}

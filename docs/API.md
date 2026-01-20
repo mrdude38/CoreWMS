@@ -1,0 +1,1001 @@
+# CoreWMS Backend API Documentation
+
+Base URL: `/api/v1`
+
+## Authentication
+
+All protected endpoints require a valid JWT token in the Authorization header:
+
+```
+Authorization: Bearer <access_token>
+```
+
+## User Roles
+
+| Role | Description |
+|------|-------------|
+| `admin` | Full system access |
+| `manager` | Can manage most resources, limited admin functions |
+| `operator` | Can create and update entries/load orders |
+| `viewer` | Read-only access |
+| `client` | Limited to their own client's data |
+
+---
+
+## Public Endpoints
+
+### Health Check
+
+```
+GET /health
+```
+
+Returns service health status.
+
+**Response:**
+```json
+{
+  "status": "ok",
+  "service": "CoreWMS Backend",
+  "version": "1.0.0"
+}
+```
+
+---
+
+## Authentication Endpoints
+
+### Sign Up
+
+```
+POST /auth/signup
+```
+
+Register a new user account.
+
+**Request Body:**
+```json
+{
+  "email": "user@example.com",
+  "password": "securepassword",
+  "full_name": "John Doe"
+}
+```
+
+**Response (201):**
+```json
+{
+  "message": "User created successfully",
+  "access_token": "eyJ...",
+  "refresh_token": "eyJ...",
+  "expires_in": 3600,
+  "user": {
+    "id": "uuid",
+    "email": "user@example.com"
+  }
+}
+```
+
+---
+
+### Sign In
+
+```
+POST /auth/signin
+```
+
+Authenticate and receive tokens.
+
+**Request Body:**
+```json
+{
+  "email": "user@example.com",
+  "password": "securepassword"
+}
+```
+
+**Response (200):**
+```json
+{
+  "access_token": "eyJ...",
+  "refresh_token": "eyJ...",
+  "expires_in": 3600,
+  "token_type": "bearer",
+  "user": {
+    "id": "uuid",
+    "email": "user@example.com"
+  },
+  "profile": {
+    "id": "uuid",
+    "full_name": "John Doe",
+    "role": "viewer",
+    "client_id": null,
+    "is_active": true
+  }
+}
+```
+
+---
+
+### Refresh Token
+
+```
+POST /auth/refresh
+```
+
+Get a new access token using a refresh token.
+
+**Request Body:**
+```json
+{
+  "refresh_token": "eyJ..."
+}
+```
+
+**Response (200):**
+```json
+{
+  "access_token": "eyJ...",
+  "refresh_token": "eyJ...",
+  "expires_in": 3600,
+  "token_type": "bearer"
+}
+```
+
+---
+
+### Reset Password
+
+```
+POST /auth/reset-password
+```
+
+Send a password reset email.
+
+**Request Body:**
+```json
+{
+  "email": "user@example.com",
+  "redirect_to": "https://app.example.com/reset"
+}
+```
+
+**Response (200):**
+```json
+{
+  "message": "Password reset email sent"
+}
+```
+
+---
+
+### Sign Out
+
+```
+POST /auth/signout
+```
+
+Log out the current user.
+
+**Response (200):**
+```json
+{
+  "message": "Logged out successfully"
+}
+```
+
+---
+
+## Protected Endpoints
+
+All endpoints below require authentication.
+
+### Get Current User
+
+```
+GET /me
+```
+
+Get the currently authenticated user's information.
+
+**Response (200):**
+```json
+{
+  "user": {
+    "id": "uuid",
+    "email": "user@example.com"
+  },
+  "profile": {
+    "id": "uuid",
+    "full_name": "John Doe",
+    "role": "operator",
+    "client_id": "uuid",
+    "is_active": true,
+    "client": { ... }
+  }
+}
+```
+
+---
+
+## Catalogs
+
+### Clients
+
+#### List All Clients
+
+```
+GET /catalogs/clients
+```
+
+**Query Parameters:**
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `active` | boolean | Filter by active status (`true` for active only) |
+
+**Response (200):**
+```json
+{
+  "data": [
+    {
+      "id": "uuid",
+      "name": "Client Name",
+      "email": "client@example.com",
+      "phone": "+1234567890",
+      "active": true,
+      "created_at": "2024-01-01T00:00:00Z"
+    }
+  ]
+}
+```
+
+---
+
+#### Search Clients
+
+```
+GET /catalogs/clients/search
+```
+
+**Query Parameters:**
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `q` | string | Search query (matches name) |
+
+**Response (200):**
+```json
+{
+  "data": [...]
+}
+```
+
+---
+
+#### Get Client by ID
+
+```
+GET /catalogs/clients/:id
+```
+
+**Response (200):**
+```json
+{
+  "data": {
+    "id": "uuid",
+    "name": "Client Name",
+    "email": "client@example.com",
+    "phone": "+1234567890",
+    "active": true,
+    "created_at": "2024-01-01T00:00:00Z"
+  }
+}
+```
+
+---
+
+#### Create Client
+
+```
+POST /catalogs/clients
+```
+
+**Required Permission:** `create:catalog`
+
+**Request Body:**
+```json
+{
+  "name": "Client Name",
+  "email": "client@example.com",
+  "phone": "+1234567890",
+  "active": true
+}
+```
+
+**Response (201):**
+```json
+{
+  "data": { ... },
+  "message": "Client created successfully"
+}
+```
+
+---
+
+#### Update Client
+
+```
+PUT /catalogs/clients/:id
+```
+
+**Required Permission:** `update:catalog`
+
+**Request Body:** (all fields optional)
+```json
+{
+  "name": "Updated Name",
+  "email": "new@example.com",
+  "phone": "+0987654321",
+  "active": false
+}
+```
+
+**Response (200):**
+```json
+{
+  "data": { ... },
+  "message": "Client updated successfully"
+}
+```
+
+---
+
+#### Delete Client
+
+```
+DELETE /catalogs/clients/:id
+```
+
+**Required Role:** `admin` or `manager`
+
+**Response (200):**
+```json
+{
+  "message": "Client deleted successfully"
+}
+```
+
+---
+
+### Suppliers
+
+#### List All Suppliers
+
+```
+GET /catalogs/suppliers
+```
+
+**Response (200):**
+```json
+{
+  "data": [
+    {
+      "id": "uuid",
+      "name": "Supplier Name",
+      "contact_name": "John Doe",
+      "email": "supplier@example.com",
+      "phone": "+1234567890",
+      "address": "123 Main St",
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": null
+    }
+  ]
+}
+```
+
+---
+
+#### Search Suppliers
+
+```
+GET /catalogs/suppliers/search?q=<query>
+```
+
+---
+
+#### Get Supplier by ID
+
+```
+GET /catalogs/suppliers/:id
+```
+
+---
+
+#### Create Supplier
+
+```
+POST /catalogs/suppliers
+```
+
+**Request Body:**
+```json
+{
+  "name": "Supplier Name",
+  "contact_name": "John Doe",
+  "email": "supplier@example.com",
+  "phone": "+1234567890",
+  "address": "123 Main St"
+}
+```
+
+---
+
+#### Update Supplier
+
+```
+PUT /catalogs/suppliers/:id
+```
+
+**Request Body:** (all fields optional)
+```json
+{
+  "name": "Updated Name",
+  "contact_name": "Jane Doe",
+  "email": "new@example.com",
+  "phone": "+0987654321",
+  "address": "456 Oak Ave"
+}
+```
+
+---
+
+#### Delete Supplier
+
+```
+DELETE /catalogs/suppliers/:id
+```
+
+**Required Role:** `admin` or `manager`
+
+---
+
+### Carriers
+
+#### List All Carriers
+
+```
+GET /catalogs/carriers
+```
+
+**Response (200):**
+```json
+{
+  "data": [
+    {
+      "id": "uuid",
+      "name": "Carrier Name",
+      "contact_name": "Driver Name",
+      "email": "carrier@example.com",
+      "phone": "+1234567890",
+      "license_plate": "ABC-123",
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": null
+    }
+  ]
+}
+```
+
+---
+
+#### Search Carriers
+
+```
+GET /catalogs/carriers/search?q=<query>
+```
+
+---
+
+#### Get Carrier by ID
+
+```
+GET /catalogs/carriers/:id
+```
+
+---
+
+#### Create Carrier
+
+```
+POST /catalogs/carriers
+```
+
+**Request Body:**
+```json
+{
+  "name": "Carrier Name",
+  "contact_name": "Driver Name",
+  "email": "carrier@example.com",
+  "phone": "+1234567890",
+  "license_plate": "ABC-123"
+}
+```
+
+---
+
+#### Update Carrier
+
+```
+PUT /catalogs/carriers/:id
+```
+
+**Request Body:** (all fields optional)
+```json
+{
+  "name": "Updated Name",
+  "contact_name": "New Driver",
+  "email": "new@example.com",
+  "phone": "+0987654321",
+  "license_plate": "XYZ-789"
+}
+```
+
+---
+
+#### Delete Carrier
+
+```
+DELETE /catalogs/carriers/:id
+```
+
+**Required Role:** `admin` or `manager`
+
+---
+
+## Entries
+
+Warehouse receiving records.
+
+### Entry Status Values
+
+| Status | Description |
+|--------|-------------|
+| `pending` | Entry is pending processing |
+| `received` | Entry has been received and processed |
+
+---
+
+#### List All Entries
+
+```
+GET /entries
+```
+
+**Query Parameters:**
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `page` | integer | Page number (default: 1) |
+| `page_size` | integer | Items per page (default: 20) |
+| `search` | string | Search in entry number, tracking, BOL |
+| `client_id` | uuid | Filter by client |
+| `supplier_id` | uuid | Filter by supplier |
+| `status` | string | Filter by status (`pending`, `received`) |
+| `start_date` | date | Filter entries from date (YYYY-MM-DD) |
+| `end_date` | date | Filter entries to date (YYYY-MM-DD) |
+
+**Response (200):**
+```json
+{
+  "data": [...],
+  "total": 100,
+  "page": 1,
+  "page_size": 20,
+  "total_pages": 5
+}
+```
+
+---
+
+#### Get Entry by ID
+
+```
+GET /entries/:id
+```
+
+**Response (200):**
+```json
+{
+  "data": {
+    "id": "uuid",
+    "entry_number": "ENT-001",
+    "client_id": "uuid",
+    "supplier_id": "uuid",
+    "carrier_id": "uuid",
+    "tracking_number": "TRACK123",
+    "bol_number": "BOL456",
+    "entry_date": "2024-01-15T00:00:00Z",
+    "status": "pending",
+    "total_packages": 10,
+    "package_type": "boxes",
+    "total_weight": 150.5,
+    "received_by": "uuid",
+    "description": "Electronic components",
+    "notes": "Handle with care",
+    "is_damaged": false,
+    "po_number": "PO-789",
+    "has_invoice": true,
+    "has_revision": false,
+    "has_classification": false,
+    "invoice_url": "https://...",
+    "created_at": "2024-01-15T10:30:00Z",
+    "updated_at": null,
+    "client": { ... },
+    "supplier": { ... },
+    "carrier": { ... }
+  }
+}
+```
+
+---
+
+#### Create Entry
+
+```
+POST /entries
+```
+
+**Request Body:**
+```json
+{
+  "entry_number": "ENT-001",
+  "client_id": "uuid",
+  "supplier_id": "uuid",
+  "carrier_id": "uuid",
+  "tracking_number": "TRACK123",
+  "bol_number": "BOL456",
+  "entry_date": "2024-01-15",
+  "status": "pending",
+  "total_packages": 10,
+  "package_type": "boxes",
+  "total_weight": 150.5,
+  "received_by": "uuid",
+  "description": "Electronic components",
+  "notes": "Handle with care",
+  "is_damaged": false,
+  "po_number": "PO-789",
+  "has_invoice": true,
+  "has_revision": false,
+  "has_classification": false,
+  "invoice_url": "https://..."
+}
+```
+
+**Required Fields:** `entry_number`, `entry_date`, `total_packages`
+
+**Response (201):**
+```json
+{
+  "data": { ... },
+  "message": "Entry created successfully"
+}
+```
+
+---
+
+#### Update Entry
+
+```
+PUT /entries/:id
+```
+
+**Request Body:** (all fields optional)
+```json
+{
+  "entry_number": "ENT-001-A",
+  "status": "received",
+  "notes": "Updated notes",
+  ...
+}
+```
+
+---
+
+#### Update Entry Status
+
+```
+PATCH /entries/:id/status
+```
+
+**Request Body:**
+```json
+{
+  "status": "received"
+}
+```
+
+**Response (200):**
+```json
+{
+  "message": "Entry status updated successfully"
+}
+```
+
+---
+
+#### Delete Entry
+
+```
+DELETE /entries/:id
+```
+
+**Required Role:** `admin`
+
+**Response (200):**
+```json
+{
+  "message": "Entry deleted successfully"
+}
+```
+
+---
+
+## Load Orders
+
+Shipment/dispatch orders.
+
+### Load Order Status Values
+
+| Status | Description |
+|--------|-------------|
+| `open` | Order is open for additions |
+| `in_progress` | Order is being processed |
+| `completed` | Order has been shipped |
+| `cancelled` | Order was cancelled |
+
+---
+
+#### List All Load Orders
+
+```
+GET /load-orders
+```
+
+**Query Parameters:**
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `page` | integer | Page number (default: 1) |
+| `page_size` | integer | Items per page (default: 20) |
+| `search` | string | Search in order number |
+| `client_id` | uuid | Filter by client |
+| `carrier_id` | uuid | Filter by carrier |
+| `status` | string | Filter by status |
+| `start_date` | date | Filter from date (YYYY-MM-DD) |
+| `end_date` | date | Filter to date (YYYY-MM-DD) |
+
+**Response (200):**
+```json
+{
+  "data": [...],
+  "total": 50,
+  "page": 1,
+  "page_size": 20,
+  "total_pages": 3
+}
+```
+
+---
+
+#### Get Load Order by ID
+
+```
+GET /load-orders/:id
+```
+
+**Response (200):**
+```json
+{
+  "data": {
+    "id": "uuid",
+    "order_number": "LO-001",
+    "client_id": "uuid",
+    "carrier_id": "uuid",
+    "load_date": "2024-01-20T00:00:00Z",
+    "status": "open",
+    "destination": "New York, NY",
+    "notes": "Deliver before noon",
+    "total_packages": 25,
+    "created_at": "2024-01-15T10:30:00Z",
+    "updated_at": null,
+    "client": { ... },
+    "carrier": { ... }
+  }
+}
+```
+
+---
+
+#### Create Load Order
+
+```
+POST /load-orders
+```
+
+**Request Body:**
+```json
+{
+  "order_number": "LO-001",
+  "client_id": "uuid",
+  "carrier_id": "uuid",
+  "load_date": "2024-01-20",
+  "status": "open",
+  "destination": "New York, NY",
+  "notes": "Deliver before noon",
+  "total_packages": 25
+}
+```
+
+**Required Fields:** `order_number`, `total_packages`
+
+---
+
+#### Update Load Order
+
+```
+PUT /load-orders/:id
+```
+
+**Request Body:** (all fields optional)
+```json
+{
+  "order_number": "LO-001-A",
+  "status": "in_progress",
+  "destination": "Boston, MA",
+  ...
+}
+```
+
+---
+
+#### Update Load Order Status
+
+```
+PATCH /load-orders/:id/status
+```
+
+**Request Body:**
+```json
+{
+  "status": "completed"
+}
+```
+
+---
+
+#### Delete Load Order
+
+```
+DELETE /load-orders/:id
+```
+
+**Required Role:** `admin` or `manager`
+
+---
+
+## Admin Endpoints
+
+All admin endpoints require the `admin` role.
+
+### List All Users
+
+```
+GET /admin/users
+```
+
+**Response (200):**
+```json
+{
+  "data": [
+    {
+      "id": "uuid",
+      "full_name": "John Doe",
+      "role": "operator",
+      "client_id": "uuid",
+      "is_active": true,
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": null,
+      "client": { ... }
+    }
+  ]
+}
+```
+
+---
+
+### Get User by ID
+
+```
+GET /admin/users/:id
+```
+
+**Response (200):**
+```json
+{
+  "data": {
+    "id": "uuid",
+    "full_name": "John Doe",
+    "role": "operator",
+    "client_id": "uuid",
+    "is_active": true,
+    "created_at": "2024-01-01T00:00:00Z",
+    "client": { ... }
+  }
+}
+```
+
+---
+
+### Update User Role
+
+```
+PUT /admin/users/:id/role
+```
+
+**Request Body:**
+```json
+{
+  "role": "manager"
+}
+```
+
+**Valid Roles:** `admin`, `manager`, `operator`, `viewer`, `client`
+
+**Response (200):**
+```json
+{
+  "message": "User role updated successfully"
+}
+```
+
+---
+
+### Update User Status
+
+```
+PUT /admin/users/:id/status
+```
+
+**Request Body:**
+```json
+{
+  "is_active": false
+}
+```
+
+**Response (200):**
+```json
+{
+  "message": "User status updated successfully"
+}
+```
+
+---
+
+## Error Responses
+
+All endpoints return errors in the following format:
+
+```json
+{
+  "error": "Error message description"
+}
+```
+
+### Common HTTP Status Codes
+
+| Code | Description |
+|------|-------------|
+| 200 | Success |
+| 201 | Created |
+| 400 | Bad Request - Invalid input |
+| 401 | Unauthorized - Missing or invalid token |
+| 403 | Forbidden - Insufficient permissions |
+| 404 | Not Found - Resource doesn't exist |
+| 500 | Internal Server Error |

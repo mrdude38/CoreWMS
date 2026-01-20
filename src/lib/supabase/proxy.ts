@@ -27,12 +27,18 @@ export async function updateSession(request: NextRequest) {
     },
   )
 
-  // Get user session - using getSession instead of getUser for proper validation
+  // IMPORTANT: Use getUser() instead of getSession() for proper JWT validation
+  // getSession() only reads from cookies without validating the token
+  // getUser() makes a request to Supabase to validate the JWT
   const {
-    data: { session },
-  } = await supabase.auth.getSession()
+    data: { user },
+    error,
+  } = await supabase.auth.getUser()
 
-  const user = session?.user ?? null
+  // If there's an auth error (invalid/expired token), treat as no user
+  if (error) {
+    console.log(`⚠️ Auth error: ${error.message}`)
+  }
 
   // Debug logging
   console.log(`🔍 Middleware: ${request.nextUrl.pathname} - User: ${user ? user.email : 'null'}`)

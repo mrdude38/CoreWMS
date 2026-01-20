@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -8,10 +8,20 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { api } from "@/lib/api"
 import { createClient } from "@/lib/supabase/client"
-import { UserPlus } from "lucide-react"
-import type { Client } from "@/lib/types"
+import { UserPlus, CheckCircle2 } from "lucide-react"
+
+interface SignupResponse {
+  message: string
+  access_token: string
+  refresh_token: string
+  expires_in: number
+  user: {
+    id: string
+    email: string
+  }
+}
 
 export default function SignupPage() {
   const router = useRouter()
@@ -20,25 +30,9 @@ export default function SignupPage() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
-  const [role, setRole] = useState<string>("viewer")
-  const [clients, setClients] = useState<Client[]>([])
-  const [selectedClient, setSelectedClient] = useState<string>("")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
-
-  useEffect(() => {
-    const loadClients = async () => {
-      const supabase = createClient()
-      const { data } = await supabase
-        .from("clients")
-        .select("*")
-        .eq("active", true)
-        .order("name")
-      setClients(data || [])
-    }
-    loadClients()
-  }, [])
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -58,28 +52,40 @@ export default function SignupPage() {
     }
 
     try {
-      const supabase = createClient()
-
-      const { data, error: signUpError } = await supabase.auth.signUp({
+      // Call backend signup endpoint
+      const response = await api.post<SignupResponse>('/auth/signup', {
         email,
         password,
-        options: {
-          data: {
-            full_name: fullName,
-            role: role,
-            client_id: role === 'client' ? selectedClient : null,
-          },
-        },
+        full_name: fullName,
       })
 
-      if (signUpError) throw signUpError
+      if (response.error) {
+        throw new Error(response.error)
+      }
 
-      // The trigger will automatically create the user_profile
+      if (response.data?.access_token && response.data?.refresh_token) {
+        // Set the session in Supabase client FIRST
+        const supabase = createClient()
+        const { error: sessionError } = await supabase.auth.setSession({
+          access_token: response.data.access_token,
+          refresh_token: response.data.refresh_token,
+        })
 
-      setSuccess(true)
-      setTimeout(() => {
-        router.push('/auth/login')
-      }, 2000)
+        if (sessionError) {
+          console.error('Session error:', sessionError)
+          throw new Error('Failed to establish session')
+        }
+
+        // Show success message
+        setSuccess(true)
+        
+        // Use window.location for a hard redirect to ensure cookies are sent
+        setTimeout(() => {
+          window.location.href = '/'
+        }, 1500)
+      } else {
+        throw new Error('No tokens received from server')
+      }
     } catch (err) {
       console.error('Signup error:', err)
       setError(err instanceof Error ? err.message : 'Failed to create account')
@@ -90,15 +96,19 @@ export default function SignupPage() {
 
   if (success) {
     return (
-      <Card>
-        <CardHeader>
+      <Card className="max-w-md mx-auto">
+        <CardHeader className="text-center">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-green-100">
+            <CheckCircle2 className="h-6 w-6 text-green-600" />
+          </div>
           <CardTitle>Account Created!</CardTitle>
-          <CardDescription>Redirecting to login...</CardDescription>
+          <CardDescription>Redirecting to dashboard...</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
           <Alert>
+            <CheckCircle2 className="h-4 w-4" />
             <AlertDescription>
-              Account created successfully! Please check your email for verification.
+              Your account has been created successfully. You are now being logged in.
             </AlertDescription>
           </Alert>
         </CardContent>
@@ -107,10 +117,19 @@ export default function SignupPage() {
   }
 
   return (
-    <Card>
-      <CardHeader>
+    <Card className="max-w-md mx-auto">
+      <CardHeader className="text-center">
+        <div className="flex justify-center mb-4">
+          <img
+            src="/logo.png"
+            alt="Core Logistics"
+            className="h-16 w-auto object-contain"
+          />
+        </div>
         <CardTitle>Create Account</CardTitle>
-        <CardDescription>Register a new user account</CardDescription>
+        <CardDescription>
+          Sign up for a new account to access the system.
+        </CardDescription>
       </CardHeader>
       <form onSubmit={handleSignup}>
         <CardContent className="space-y-4">
@@ -149,48 +168,6 @@ export default function SignupPage() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="role">Role</Label>
-            <Select value={role} onValueChange={setRole} disabled={loading}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="admin">Admin</SelectItem>
-                <SelectItem value="manager">Manager</SelectItem>
-                <SelectItem value="operator">Operator</SelectItem>
-                <SelectItem value="viewer">Viewer</SelectItem>
-                <SelectItem value="client">Client</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Client Selection - only show if role is 'client' */}
-          {role === 'client' && (
-            <div className="space-y-2">
-              <Label htmlFor="client">
-                Client <span className="text-destructive">*</span>
-              </Label>
-              <Select
-                value={selectedClient}
-                onValueChange={setSelectedClient}
-                disabled={loading}
-                required={role === 'client'}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select client" />
-                </SelectTrigger>
-                <SelectContent>
-                  {clients.map((client) => (
-                    <SelectItem key={client.id} value={client.id}>
-                      {client.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-
-          <div className="space-y-2">
             <Label htmlFor="password">Password</Label>
             <Input
               id="password"
@@ -201,8 +178,8 @@ export default function SignupPage() {
               disabled={loading}
               minLength={8}
               autoComplete="new-password"
+              placeholder="Minimum 8 characters"
             />
-            <p className="text-xs text-muted-foreground">Minimum 8 characters</p>
           </div>
 
           <div className="space-y-2">
@@ -218,16 +195,9 @@ export default function SignupPage() {
               autoComplete="new-password"
             />
           </div>
-
-          <div className="text-sm text-muted-foreground">
-            Already have an account?{" "}
-            <Link href="/auth/login" className="text-primary hover:underline">
-              Login here
-            </Link>
-          </div>
         </CardContent>
 
-        <CardFooter>
+        <CardFooter className="flex flex-col gap-4">
           <Button type="submit" className="w-full" disabled={loading}>
             {loading ? (
               "Creating account..."
@@ -238,6 +208,12 @@ export default function SignupPage() {
               </>
             )}
           </Button>
+          <div className="text-center text-sm text-muted-foreground">
+            Already have an account?{" "}
+            <Link href="/auth/login" className="text-primary hover:underline font-medium">
+              Login here
+            </Link>
+          </div>
         </CardFooter>
       </form>
     </Card>

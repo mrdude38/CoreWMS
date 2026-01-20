@@ -3,33 +3,28 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { createClient } from "@/lib/supabase/server"
 import type { Entry } from "@/lib/types"
 import { requirePermission } from "@/lib/casl/server-guards"
 import { ProtectedNewButton } from "@/components/protected-new-button"
-import { getClientFilter } from "@/lib/casl/client-filter"
+import { createServerServices } from "@/lib/api/server"
 
 async function getEntries() {
   await requirePermission('read', 'Entry')
 
-  const supabase = await createClient()
-
-  // Get client filter if applicable
-  const clientId = await getClientFilter()
-
-  let query = supabase
-    .from("entries")
-    .select("*, clients(name), suppliers(name)")
-    .order("created_at", { ascending: false })
-
-  // Apply client filter for client users
-  if (clientId) {
-    query = query.eq('client_id', clientId)
+  const { entries } = createServerServices()
+  const response = await entries.getAll({ page: 1, page_size: 50 })
+  
+  if (response.error) {
+    console.error('Failed to fetch entries:', response.error)
+    return []
   }
 
-  const { data } = await query
-
-  return (data || []) as Entry[]
+  // Handle both paginated response and direct array
+  if (Array.isArray(response.data)) {
+    return response.data as Entry[]
+  }
+  
+  return (response.data?.data || response.data || []) as Entry[]
 }
 
 async function EntriesContent() {
@@ -85,7 +80,7 @@ async function EntriesContent() {
                       <Badge variant={getStatusVariant(entry.status)}>{entry.status}</Badge>
                     </div>
                     <p className="text-sm text-muted-foreground">
-                      {(entry as any).clients?.name || "No client"} • {(entry as any).suppliers?.name || "No supplier"}
+                      {entry.clients?.name || (entry as any).client?.name || "No client"} • {entry.suppliers?.name || (entry as any).supplier?.name || "No supplier"}
                     </p>
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
                       <span>{new Date(entry.entry_date).toLocaleDateString()}</span>
