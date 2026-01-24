@@ -37,8 +37,10 @@ export interface Entry {
   carrier_id?: string
   tracking_number?: string
   bol_number?: string
+  po_number?: string
+  maniobras_entry_number?: string
   entry_date: string
-  status: "pending" | "received"
+  status: "pending" | "received" | "pendiente" | "recibido"
   total_packages: number
   package_type?: string
   total_weight?: number
@@ -46,7 +48,7 @@ export interface Entry {
   description?: string
   notes?: string
   is_damaged: boolean
-  po_number?: string
+  damage_description?: string
   // Inspection fields
   has_invoice: boolean
   has_revision: boolean
@@ -219,6 +221,7 @@ export interface EntryRevisionItem {
   quantity: number
   unit_of_measure?: string
   weight_kg: number
+  is_on_tarima?: boolean
   created_at: string
   updated_at: string
 }

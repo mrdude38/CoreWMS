@@ -4,25 +4,30 @@ import { useState, useEffect } from "react"
 import { useRouter, useParams } from "next/navigation"
 import Link from "next/link"
 import { useAbility } from "@/lib/casl/ability-context"
-import { ArrowLeft } from "lucide-react"
+import { ArrowLeft, Mail, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { createClient } from "@/lib/supabase/client"
+import { useToast } from "@/hooks/use-toast"
+import { api } from "@/lib/api"
 
 export default function Page() {
   const router = useRouter()
   const params = useParams()
   const loadOrderId = params.id as string
   const ability = useAbility()
+  const { toast } = useToast()
 
   const [loading, setLoading] = useState(false)
   const [loadingData, setLoadingData] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [sendingEmail, setSendingEmail] = useState(false)
 
   const [loadOrder, setLoadOrder] = useState<any>(null)
   const [selectedStatus, setSelectedStatus] = useState<string>("pendiente")
+  const [notes, setNotes] = useState<string>("")
 
   // Permission check is done after data loads to check if it's an exit
 
@@ -31,23 +36,19 @@ export default function Page() {
   }, [])
 
   const loadData = async () => {
-    const supabase = createClient()
+    const response = await api.get<any>(`/load-orders/${loadOrderId}`)
 
-    const { data: orderData, error: orderError } = await supabase
-      .from("load_orders")
-      .select("*")
-      .eq("id", loadOrderId)
-      .single()
-
-    if (orderError) {
+    if (response.error) {
       setError("Failed to load load order")
       setLoadingData(false)
       return
     }
 
-    if (orderData) {
+    if (response.data) {
+      const orderData = response.data
       setLoadOrder(orderData)
       setSelectedStatus(orderData.status)
+      setNotes(orderData.notes || "")
 
       // Check permissions - exits (status=salida) can only be edited by admin
       const isExit = orderData.status === 'salida'
@@ -64,23 +65,54 @@ export default function Page() {
     setLoadingData(false)
   }
 
+  const sendExitNotification = async () => {
+    setSendingEmail(true)
+    try {
+      const response = await api.post<{ attachmentsCount?: number }>('/emails/exit-notification', {
+        load_order_id: loadOrderId,
+      })
+
+      if (response.error) {
+        throw new Error(response.error)
+      }
+
+      toast({
+        title: "Notification sent",
+        description: `Exit email sent successfully with ${response.data?.attachmentsCount || 0} attachments.`,
+      })
+    } catch (err) {
+      console.error("Error sending exit notification:", err)
+      toast({
+        title: "Error sending email",
+        description: err instanceof Error ? err.message : "Unknown error",
+        variant: "destructive",
+      })
+    } finally {
+      setSendingEmail(false)
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setLoading(true)
     setError(null)
 
+    const previousStatus = loadOrder?.status
+    const isChangingToSalida = selectedStatus === "salida" && previousStatus !== "salida"
+
     try {
-      const supabase = createClient()
+      const response = await api.patch(`/load-orders/${loadOrderId}`, {
+        status: selectedStatus,
+        notes: notes.trim() || null,
+      })
 
-      const { error: updateError } = await supabase
-        .from("load_orders")
-        .update({
-          status: selectedStatus,
-        })
-        .eq("id", loadOrderId)
+      if (response.error) {
+        throw new Error(response.error)
+      }
 
-      if (updateError) {
-        throw new Error(updateError.message || updateError.details || updateError.hint || "Unknown error")
+      // Send exit notification email when status changes to "salida"
+      if (isChangingToSalida) {
+        await sendExitNotification()
       }
 
       router.push(`/operations/load-orders/${loadOrderId}`)
@@ -140,8 +172,8 @@ export default function Page() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="pendiente">Pendiente</SelectItem>
-                  <SelectItem value="salida">Salida</SelectItem>
+                  <SelectItem value="pendiente">Pending</SelectItem>
+                  <SelectItem value="salida">Shipped</SelectItem>
                 </SelectContent>
               </Select>
               <p className="text-sm text-muted-foreground">
@@ -149,18 +181,45 @@ export default function Page() {
                   ? "Order is pending and awaiting dispatch"
                   : "Order has been dispatched for delivery"}
               </p>
+              {selectedStatus === "salida" && loadOrder?.status !== "salida" && (
+                <div className="flex items-center gap-2 text-sm text-blue-600 bg-blue-50 p-3 rounded-md">
+                  <Mail className="h-4 w-4" />
+                  <span>
+                    An exit notification email will be sent to the client with all attached documents.
+                  </span>
+                </div>
+              )}
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="notes">Notes</Label>
+              <Textarea
+                id="notes"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Additional notes for the load order..."
+                rows={3}
+              />
             </div>
 
             {error && <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</div>}
 
             <div className="flex gap-2">
-              <Button type="submit" disabled={loading}>
-                {loading ? "Saving..." : "Save Changes"}
+              <Button type="submit" disabled={loading || sendingEmail}>
+                {loading || sendingEmail ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    {sendingEmail ? "Sending email..." : "Saving..."}
+                  </>
+                ) : (
+                  "Save Changes"
+                )}
               </Button>
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => router.push(`/operations/load-orders/${loadOrderId}`)}
+                disabled={loading || sendingEmail}
               >
                 Cancel
               </Button>

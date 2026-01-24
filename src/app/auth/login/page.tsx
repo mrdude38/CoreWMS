@@ -8,8 +8,25 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { createClient } from "@/lib/supabase/client"
 import { LogIn } from "lucide-react"
+import { createClient } from "@/lib/supabase/client"
+
+interface LoginResponse {
+  user: {
+    id: string
+    email: string
+    full_name: string
+    role: string
+    client_id: string | null
+    is_active: boolean
+  }
+  session: {
+    access_token: string
+    refresh_token: string
+    expires_in: number
+    expires_at: number
+  }
+}
 
 function LoginForm() {
   const router = useRouter()
@@ -28,31 +45,27 @@ function LoginForm() {
     setError(null)
 
     try {
-      const supabase = createClient()
-
-      const { data, error: signInError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+      // Call backend login API
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
       })
 
-      if (signInError) throw signInError
+      const data = await response.json()
 
-      // Check if user has profile and is active
-      const { data: profile, error: profileError } = await supabase
-        .from('user_profiles')
-        .select('is_active, role, full_name')
-        .eq('id', data.user.id)
-        .single()
-
-      if (profileError || !profile) {
-        await supabase.auth.signOut()
-        throw new Error('User profile not found. Please contact an administrator.')
+      if (!response.ok) {
+        throw new Error(data.error || 'Invalid email or password')
       }
 
-      if (!profile.is_active) {
-        await supabase.auth.signOut()
-        throw new Error('Your account has been deactivated. Please contact an administrator.')
-      }
+      const loginData = data as LoginResponse
+
+      // Set the session in Supabase client so cookies are properly set
+      const supabase = createClient()
+      await supabase.auth.setSession({
+        access_token: loginData.session.access_token,
+        refresh_token: loginData.session.refresh_token,
+      })
 
       // Redirect to original destination or dashboard
       router.push(redirect)

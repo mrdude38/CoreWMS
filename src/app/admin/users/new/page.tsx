@@ -3,16 +3,17 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
+import { ArrowLeft, UserPlus, Shield, Mail } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { useAbility } from "@/lib/casl/ability-context"
+import type { Client } from "@/lib/types"
 import { Switch } from "@/components/ui/switch"
 import { api } from "@/lib/api"
-import { ArrowLeft, UserPlus, Shield, Mail } from "lucide-react"
-import type { Client } from "@/lib/types"
 
 interface CreateUserResponse {
   id: string
@@ -26,6 +27,14 @@ interface CreateUserResponse {
 
 export default function NewUserPage() {
   const router = useRouter()
+  const ability = useAbility()
+
+  // Check admin permission
+  useEffect(() => {
+    if (!ability.can('manage', 'all')) {
+      router.push('/')
+    }
+  }, [ability, router])
 
   const [fullName, setFullName] = useState("")
   const [email, setEmail] = useState("")
@@ -77,7 +86,7 @@ export default function NewUserPage() {
     }
 
     if (role === 'client' && !selectedClient) {
-      setError("Please select a client for client role")
+      setError("Please select a client for client users")
       setLoading(false)
       return
     }

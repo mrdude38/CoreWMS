@@ -35,10 +35,22 @@ async function EntriesContent() {
       case "completed":
         return "default"
       case "received":
+      case "recibido":
         return "secondary"
       default:
         return "outline"
     }
+  }
+
+  const translateStatus = (status: string) => {
+    const translations: Record<string, string> = {
+      'pendiente': 'Pending',
+      'recibido': 'Received',
+      'received': 'Received',
+      'pending': 'Pending',
+      'completed': 'Completed',
+    }
+    return translations[status.toLowerCase()] || status
   }
 
   return (
@@ -77,7 +89,7 @@ async function EntriesContent() {
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
                       <p className="font-medium">{entry.entry_number}</p>
-                      <Badge variant={getStatusVariant(entry.status)}>{entry.status}</Badge>
+                      <Badge variant={getStatusVariant(entry.status)}>{translateStatus(entry.status)}</Badge>
                     </div>
                     <p className="text-sm text-muted-foreground">
                       {entry.clients?.name || (entry as any).client?.name || "No client"} • {entry.suppliers?.name || (entry as any).supplier?.name || "No supplier"}

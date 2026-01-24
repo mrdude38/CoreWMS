@@ -10,7 +10,6 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
-import { createClient } from "@/lib/supabase/client"
 import { Plus, ArrowLeft } from "lucide-react"
 import {
   Dialog,
@@ -20,9 +19,10 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import type { Client, Supplier, Carrier, PackageType, User, Entry } from "@/lib/types"
+import type { Client, Supplier, Carrier, PackageType, UserProfile, Entry } from "@/lib/types"
 import Link from "next/link"
 import { useAbility } from "@/lib/casl/ability-context"
+import { api } from "@/lib/api"
 
 export default function Page() {
   const router = useRouter()
@@ -48,12 +48,15 @@ export default function Page() {
   const [filteredSuppliers, setFilteredSuppliers] = useState<Supplier[]>([])
   const [carriers, setCarriers] = useState<Carrier[]>([])
   const [packageTypes, setPackageTypes] = useState<PackageType[]>([])
-  const [users, setUsers] = useState<User[]>([])
+  const [operators, setOperators] = useState<UserProfile[]>([])
 
   // Form states
   const [selectedClientId, setSelectedClientId] = useState<string>("")
   const [selectedSupplierId, setSelectedSupplierId] = useState<string>("")
   const [selectedCarrierId, setSelectedCarrierId] = useState<string>("")
+  const [trackingNumber, setTrackingNumber] = useState<string>("")
+  const [poNumber, setPoNumber] = useState<string>("")
+  const [maniobrasEntryNumber, setManiobrasEntryNumber] = useState<string>("")
   const [selectedPackageTypeId, setSelectedPackageTypeId] = useState<string>("")
   const [selectedReceivedBy, setSelectedReceivedBy] = useState<string>("")
   const [selectedStatus, setSelectedStatus] = useState<string>("pendiente")
@@ -67,9 +70,6 @@ export default function Page() {
   // Supplier dialog states
   const [showSupplierDialog, setShowSupplierDialog] = useState(false)
   const [newSupplierName, setNewSupplierName] = useState("")
-  const [newSupplierContact, setNewSupplierContact] = useState("")
-  const [newSupplierEmail, setNewSupplierEmail] = useState("")
-  const [newSupplierPhone, setNewSupplierPhone] = useState("")
   const [addingSupplier, setAddingSupplier] = useState(false)
 
   useEffect(() => {
@@ -85,23 +85,21 @@ export default function Page() {
   }, [selectedClientId, suppliers])
 
   const loadData = async () => {
-    const supabase = createClient()
-
-    // Load all data in parallel
-    const [entryRes, clientsRes, suppliersRes, carriersRes, packageTypesRes, usersRes] = await Promise.all([
-      supabase.from("entries").select("*").eq("id", entryId).single(),
-      supabase.from("clients").select("*").order("name"),
-      supabase.from("suppliers").select("*").order("name"),
-      supabase.from("carriers").select("*").order("name"),
-      supabase.from("package_types").select("*").order("name"),
-      supabase.from("users").select("*").order("name"),
+    // Load all data in parallel using backend APIs
+    const [entryRes, clientsRes, suppliersRes, carriersRes, packageTypesRes, operatorsRes] = await Promise.all([
+      api.get<Entry>(`/entries/${entryId}`),
+      api.get<Client[]>('/catalogs/clients'),
+      api.get<Supplier[]>('/catalogs/suppliers'),
+      api.get<Carrier[]>('/catalogs/carriers'),
+      api.get<PackageType[]>('/catalogs/package-types'),
+      api.get<UserProfile[]>('/catalogs/operators'),
     ])
 
     if (clientsRes.data) setClients(clientsRes.data)
     if (suppliersRes.data) setSuppliers(suppliersRes.data)
     if (carriersRes.data) setCarriers(carriersRes.data)
     if (packageTypesRes.data) setPackageTypes(packageTypesRes.data)
-    if (usersRes.data) setUsers(usersRes.data)
+    if (operatorsRes.data) setOperators(operatorsRes.data)
 
     if (entryRes.data) {
       const entryData = entryRes.data as Entry
@@ -111,6 +109,9 @@ export default function Page() {
       setSelectedClientId(entryData.client_id || "")
       setSelectedSupplierId(entryData.supplier_id || "")
       setSelectedCarrierId(entryData.carrier_id || "")
+      setTrackingNumber(entryData.tracking_number || "")
+      setPoNumber(entryData.po_number || "")
+      setManiobrasEntryNumber((entryData as any).maniobras_entry_number || "")
       setSelectedPackageTypeId((entryData as any).package_type_id || "")
       setSelectedReceivedBy(entryData.received_by || "")
       setSelectedStatus(entryData.status)
@@ -119,7 +120,7 @@ export default function Page() {
       setDescription(entryData.description || "")
       setNotes(entryData.notes || "")
       setIsDamaged(entryData.is_damaged || false)
-      setDamageDescription("")
+      setDamageDescription(entryData.damage_description || "")
     }
 
     setLoadingData(false)
@@ -136,21 +137,11 @@ export default function Page() {
 
     setAddingSupplier(true)
     try {
-      const supabase = createClient()
+      const response = await api.post<Supplier>('/catalogs/suppliers', {
+        name: newSupplierName,
+      })
 
-      // Insert new supplier
-      const { data: newSupplier, error: supplierError } = await supabase
-        .from("suppliers")
-        .insert({
-          name: newSupplierName,
-          contact_name: newSupplierContact,
-          email: newSupplierEmail,
-          phone: newSupplierPhone,
-        })
-        .select()
-        .single()
-
-      if (supplierError) throw supplierError
+      if (response.error) throw new Error(response.error)
 
       // Refresh suppliers
       await loadData()
@@ -160,13 +151,11 @@ export default function Page() {
 
       // Reset form
       setNewSupplierName("")
-      setNewSupplierContact("")
-      setNewSupplierEmail("")
-      setNewSupplierPhone("")
       setShowSupplierDialog(false)
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error adding supplier:", err)
-      alert("Error adding supplier")
+      const errorMessage = err?.message || JSON.stringify(err)
+      alert(`Error adding supplier: ${errorMessage}`)
     } finally {
       setAddingSupplier(false)
     }
@@ -178,12 +167,13 @@ export default function Page() {
     setError(null)
 
     try {
-      const supabase = createClient()
-
       const updateData = {
         client_id: selectedClientId,
         supplier_id: selectedSupplierId,
         carrier_id: selectedCarrierId || null,
+        tracking_number: trackingNumber,
+        po_number: poNumber,
+        maniobras_entry_number: maniobrasEntryNumber || null,
         package_type_id: selectedPackageTypeId || null,
         status: selectedStatus,
         total_packages: Number.parseInt(totalPackages) || 0,
@@ -195,13 +185,10 @@ export default function Page() {
         damage_description: isDamaged ? damageDescription : null,
       }
 
-      const { error: updateError } = await supabase
-        .from("entries")
-        .update(updateData)
-        .eq("id", entryId)
+      const response = await api.patch(`/entries/${entryId}`, updateData)
 
-      if (updateError) {
-        throw new Error(updateError.message || updateError.details || updateError.hint || "Unknown error")
+      if (response.error) {
+        throw new Error(response.error)
       }
 
       router.push(`/operations/entries/${entryId}`)
@@ -311,34 +298,6 @@ export default function Page() {
                             placeholder="Enter supplier name"
                           />
                         </div>
-                        <div className="grid gap-2">
-                          <Label htmlFor="new_supplier_contact">Contact Name</Label>
-                          <Input
-                            id="new_supplier_contact"
-                            value={newSupplierContact}
-                            onChange={(e) => setNewSupplierContact(e.target.value)}
-                            placeholder="Enter contact name"
-                          />
-                        </div>
-                        <div className="grid gap-2">
-                          <Label htmlFor="new_supplier_email">Email</Label>
-                          <Input
-                            id="new_supplier_email"
-                            type="email"
-                            value={newSupplierEmail}
-                            onChange={(e) => setNewSupplierEmail(e.target.value)}
-                            placeholder="email@example.com"
-                          />
-                        </div>
-                        <div className="grid gap-2">
-                          <Label htmlFor="new_supplier_phone">Phone</Label>
-                          <Input
-                            id="new_supplier_phone"
-                            value={newSupplierPhone}
-                            onChange={(e) => setNewSupplierPhone(e.target.value)}
-                            placeholder="Enter phone number"
-                          />
-                        </div>
                         <Button
                           type="button"
                           onClick={handleAddSupplier}
@@ -370,6 +329,47 @@ export default function Page() {
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+
+              {/* Tracking Number - Required */}
+              <div className="grid gap-2">
+                <Label htmlFor="tracking_number">
+                  Tracking Number <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  id="tracking_number"
+                  value={trackingNumber}
+                  onChange={(e) => setTrackingNumber(e.target.value)}
+                  placeholder="Enter tracking number"
+                  required
+                />
+              </div>
+
+              {/* PO Number - Required */}
+              <div className="grid gap-2">
+                <Label htmlFor="po_number">
+                  PO Number <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  id="po_number"
+                  value={poNumber}
+                  onChange={(e) => setPoNumber(e.target.value)}
+                  placeholder="Enter PO number"
+                  required
+                />
+              </div>
+
+              {/* CW Entry Number - Optional */}
+              <div className="grid gap-2">
+                <Label htmlFor="maniobras_entry_number">
+                  No. Entrada CW
+                </Label>
+                <Input
+                  id="maniobras_entry_number"
+                  value={maniobrasEntryNumber}
+                  onChange={(e) => setManiobrasEntryNumber(e.target.value)}
+                  placeholder="Numero de entrada CW"
+                />
               </div>
 
               {/* Status - Required */}
@@ -447,12 +447,12 @@ export default function Page() {
                 </Label>
                 <Select required value={selectedReceivedBy} onValueChange={setSelectedReceivedBy}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Select user" />
+                    <SelectValue placeholder="Select operator" />
                   </SelectTrigger>
                   <SelectContent>
-                    {users.map((user) => (
-                      <SelectItem key={user.id} value={user.id}>
-                        {user.name}
+                    {operators.map((operator) => (
+                      <SelectItem key={operator.id} value={operator.id}>
+                        {operator.full_name}
                       </SelectItem>
                     ))}
                   </SelectContent>

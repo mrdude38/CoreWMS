@@ -1,5 +1,6 @@
 import { Suspense } from "react"
-import { PackageOpen, TruckIcon, Package, Clock } from "lucide-react"
+import { redirect } from "next/navigation"
+import { PackageOpen, TruckIcon, Package, Clock, Users, Building2 } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -7,25 +8,50 @@ import { Badge } from "@/components/ui/badge"
 import { createClient } from "@/lib/supabase/server"
 import { ProtectedNewButton } from "@/components/protected-new-button"
 
-async function getDashboardData() {
+async function getUserProfile() {
   const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  
+  if (!user) {
+    return null
+  }
 
-  // User authentication is verified by middleware
-  // No need to check here - middleware redirects unauthenticated users
+  const { data: profile } = await supabase
+    .from('user_profiles')
+    .select('*')
+    .eq('id', user.id)
+    .single()
+
+  return profile
+}
+
+async function getDashboardData(role: string, clientId?: string | null) {
+  const supabase = await createClient()
 
   const today = new Date().toISOString().split("T")[0]
 
+  // Build queries based on role
+  let loadOrdersQuery = supabase
+    .from("load_orders")
+    .select("*, clients(name), carriers(name)")
+    .eq("status", "pendiente")
+    .order("created_at", { ascending: false })
+    .limit(5)
+
+  let entriesQuery = supabase
+    .from("entries")
+    .select("*", { count: "exact" })
+    .eq("entry_date", today)
+
+  // Client users can only see their own data
+  if (role === 'client' && clientId) {
+    loadOrdersQuery = loadOrdersQuery.eq('client_id', clientId)
+    entriesQuery = entriesQuery.eq('client_id', clientId)
+  }
+
   const [{ data: openLoadOrders }, { data: todayEntries, count: todayEntriesCount }] = await Promise.all([
-    supabase
-      .from("load_orders")
-      .select("*, clients(name), carriers(name)")
-      .eq("status", "pendiente")
-      .order("created_at", { ascending: false })
-      .limit(5),
-    supabase
-      .from("entries")
-      .select("*", { count: "exact" })
-      .eq("entry_date", today),
+    loadOrdersQuery,
+    entriesQuery,
   ])
 
   return {
@@ -35,7 +61,24 @@ async function getDashboardData() {
 }
 
 async function DashboardContent() {
-  const { openLoadOrders, todayEntriesCount } = await getDashboardData()
+  const profile = await getUserProfile()
+
+  if (!profile) {
+    redirect('/auth/login')
+  }
+
+  // Client users should be redirected to entries page
+  if (profile.role === 'client') {
+    redirect('/operations/entries')
+  }
+
+  const { openLoadOrders, todayEntriesCount } = await getDashboardData(profile.role, profile.client_id)
+
+  const isAdmin = profile.role === 'admin'
+  const isManager = profile.role === 'manager'
+  const isOperator = profile.role === 'operator'
+  const canManageCatalogs = isAdmin || isManager
+  const canCreateEntries = isAdmin || isManager || isOperator
 
   return (
     <>
@@ -44,18 +87,20 @@ async function DashboardContent() {
           <h1 className="text-3xl font-bold tracking-tight text-balance">Dashboard</h1>
           <p className="text-muted-foreground">Welcome to your warehouse management system</p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <ProtectedNewButton
-            href="/operations/entries/new"
-            label="New Entry"
-            subject="Entry"
-          />
-          <ProtectedNewButton
-            href="/operations/load-orders/new"
-            label="New Load Order"
-            subject="LoadOrder"
-          />
-        </div>
+        {canCreateEntries && (
+          <div className="flex flex-wrap gap-2">
+            <ProtectedNewButton
+              href="/operations/entries/new"
+              label="New Entry"
+              subject="Entry"
+            />
+            <ProtectedNewButton
+              href="/operations/load-orders/new"
+              label="New Load Order"
+              subject="LoadOrder"
+            />
+          </div>
+        )}
       </div>
 
       <div className="mb-8 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -165,12 +210,22 @@ async function DashboardContent() {
                   View All Load Orders
                 </Link>
               </Button>
-              <Button asChild variant="outline" className="w-full justify-start">
-                <Link href="/catalogs/clients">
-                  <Package className="mr-2 h-4 w-4" />
-                  Manage Clients
-                </Link>
-              </Button>
+              {canManageCatalogs && (
+                <>
+                  <Button asChild variant="outline" className="w-full justify-start">
+                    <Link href="/catalogs/clients">
+                      <Users className="mr-2 h-4 w-4" />
+                      Manage Clients
+                    </Link>
+                  </Button>
+                  <Button asChild variant="outline" className="w-full justify-start">
+                    <Link href="/catalogs/suppliers">
+                      <Building2 className="mr-2 h-4 w-4" />
+                      Manage Suppliers
+                    </Link>
+                  </Button>
+                </>
+              )}
               <Button asChild variant="outline" className="w-full justify-start">
                 <Link href="/reports">
                   <Clock className="mr-2 h-4 w-4" />

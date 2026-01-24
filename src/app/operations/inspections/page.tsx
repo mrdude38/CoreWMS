@@ -53,10 +53,22 @@ async function InspectionsContent() {
       case "completed":
         return "default"
       case "received":
+      case "recibido":
         return "secondary"
       default:
         return "outline"
     }
+  }
+
+  const translateStatus = (status: string) => {
+    const translations: Record<string, string> = {
+      'pendiente': 'Pending',
+      'recibido': 'Received',
+      'received': 'Received',
+      'pending': 'Pending',
+      'completed': 'Completed',
+    }
+    return translations[status.toLowerCase()] || status
   }
 
   return (
@@ -85,15 +97,15 @@ async function InspectionsContent() {
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
                       <p className="font-medium">{entry.entry_number}</p>
-                      <Badge variant={getStatusVariant(entry.status)}>{entry.status}</Badge>
+                      <Badge variant={getStatusVariant(entry.status)}>{translateStatus(entry.status)}</Badge>
                     </div>
                     <p className="text-sm text-muted-foreground">
                       {(entry as any).clients?.name || "No client"} • {(entry as any).suppliers?.name || "No supplier"}
                     </p>
                     <div className="flex items-center gap-4 mt-2">
-                      <InspectionStatus completed={entry.has_invoice ?? false} label="Factura" />
+                      <InspectionStatus completed={entry.has_invoice ?? false} label="Invoice" />
                       <InspectionStatus completed={entry.has_revision ?? false} label="Revision" />
-                      <InspectionStatus completed={entry.has_classification ?? false} label="Clasificacion" />
+                      <InspectionStatus completed={entry.has_classification ?? false} label="Classification" />
                     </div>
                   </div>
                   <Button asChild variant="outline" size="sm">

@@ -12,7 +12,6 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
-import { createClient } from "@/lib/supabase/client"
 import { Package, AlertCircle } from "lucide-react"
 import {
   Dialog,
@@ -23,6 +22,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import type { Client, Carrier, Entry } from "@/lib/types"
+import { api } from "@/lib/api"
 
 interface EntryWithAvailability extends Entry {
   packages_available: number
@@ -52,6 +52,7 @@ export default function Page() {
   const [selectedCarrier, setSelectedCarrier] = useState<string>("")
   const [selectedStatus, setSelectedStatus] = useState<string>("pendiente")
   const [pedimentoInvoice, setPedimentoInvoice] = useState<string>("")
+  const [notes, setNotes] = useState<string>("")
 
   // Selected entries with their quantities
   const [selectedEntries, setSelectedEntries] = useState<Map<string, SelectedEntry>>(new Map())
@@ -100,24 +101,13 @@ export default function Page() {
   }, [selectedClient, entries])
 
   const loadData = async () => {
-    const supabase = createClient()
-
-    // Build clients query with optional filter
-    let clientsQuery = supabase
-      .from("clients")
-      .select("*")
-      .eq("active", true)
-      .order("name")
-
-    // If client user, only show their client
-    if (userClientId) {
-      clientsQuery = clientsQuery.eq('id', userClientId)
-    }
+    // Load data using backend APIs
+    const clientParams = userClientId ? { client_id: userClientId } : {}
 
     const [clientsRes, carriersRes, entriesRes] = await Promise.all([
-      clientsQuery,
-      supabase.from("carriers").select("*").eq("active", true).order("name"),
-      supabase.from("entries").select("*").eq("status", "recibido").order("entry_number"),
+      api.get<Client[]>('/catalogs/clients', clientParams),
+      api.get<Carrier[]>('/catalogs/carriers'),
+      api.get<EntryWithAvailability[]>('/entries/available-for-load-order'),
     ])
 
     if (clientsRes.data) {
@@ -131,22 +121,13 @@ export default function Page() {
     if (carriersRes.data) setCarriers(carriersRes.data)
 
     if (entriesRes.data) {
-      // For each entry, calculate packages already assigned to load orders
-      const entriesWithAvailability = await Promise.all(
-        entriesRes.data.map(async (entry) => {
-          const { data: items } = await supabase
-            .from("load_order_items")
-            .select("packages_quantity")
-            .eq("entry_id", entry.id)
-
-          const packages_assigned = items?.reduce((sum, item) => sum + item.packages_quantity, 0) || 0
-          const packages_available = entry.total_packages - packages_assigned
-
-          return {
-            ...entry,
-            packages_assigned,
-            packages_available,
-          } as EntryWithAvailability
+      // Backend should return entries with availability calculated
+      const entriesWithAvailability = entriesRes.data.map((entry) => {
+        return {
+          ...entry,
+          packages_assigned: entry.packages_assigned || 0,
+          packages_available: entry.packages_available || entry.total_packages,
+        } as EntryWithAvailability
         })
       )
 
@@ -244,68 +225,84 @@ export default function Page() {
     }
 
     try {
-      const supabase = createClient()
-
-      // Get the next order number
-      const { data: lastOrder } = await supabase
-        .from("load_orders")
-        .select("order_number")
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .single()
-
-      let nextNumber = 1
-      if (lastOrder?.order_number) {
-        const match = lastOrder.order_number.match(/LO-(\d+)/)
-        if (match) {
-          nextNumber = Number.parseInt(match[1]) + 1
-        }
-      }
-
-      const orderNumber = `LO-${String(nextNumber).padStart(6, "0")}`
-
-      // Insert load order
-      const { data: loadOrder, error: insertError } = await supabase
-        .from("load_orders")
-        .insert({
-          order_number: orderNumber,
-          client_id: selectedClient,
-          carrier_id: selectedCarrier,
-          status: selectedStatus,
-          total_packages: getTotalPackages(),
-          pedimento_invoice_number: pedimentoInvoice || null,
-        })
-        .select()
-        .single()
-
-      if (insertError) {
-        throw new Error(insertError.message || insertError.details || insertError.hint || "Error creating load order")
-      }
-
-      // Insert load order items
+      // Prepare items for the load order
       const items = Array.from(selectedEntries.values()).map((selected) => ({
-        load_order_id: loadOrder.id,
         entry_id: selected.entry.id,
         packages_quantity: selected.quantity,
         is_partial: selected.isPartial,
       }))
 
-      const { error: itemsError } = await supabase.from("load_order_items").insert(items)
+      // Create load order with items via backend API
+      const response = await api.post<{ id: string; order_number: string }>('/load-orders', {
+        client_id: selectedClient,
+        carrier_id: selectedCarrier,
+        status: selectedStatus,
+        total_packages: getTotalPackages(),
+        pedimento_invoice_number: pedimentoInvoice || null,
+        notes: notes.trim() || null,
+        items: items,
+      })
 
-      if (itemsError) {
-        throw new Error(itemsError.message || itemsError.details || itemsError.hint || "Error creating load order items")
+      if (response.error) {
+        throw new Error(response.error)
       }
 
-      // Trigger email notification (fire and forget)
+      const loadOrder = response.data
+
+      // Trigger email notification (backend handles this)
       if (loadOrder) {
-        fetch('/api/emails/load-order-notification', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ loadOrderId: loadOrder.id }),
-        }).catch(console.error) // Don't block on email errors
+        try {
+          // Get client and carrier info for the email
+          const selectedClientData = clients.find(c => c.id === selectedClient)
+          const selectedCarrierData = carriers.find(c => c.id === selectedCarrier)
+
+          // Prepare entries data for the email
+          const entriesForEmail = Array.from(selectedEntries.values()).map((selected) => ({
+            entry_number: selected.entry.entry_number,
+            packages_quantity: selected.quantity,
+            maniobras_entry_number: (selected.entry as any).maniobras_entry_number || null,
+          }))
+
+          // Build the complete load order object for the email
+          const loadOrderForEmail = {
+            ...loadOrder,
+            clients: selectedClientData ? {
+              id: selectedClientData.id,
+              name: selectedClientData.name,
+              email: selectedClientData.email,
+            } : null,
+            carriers: selectedCarrierData ? {
+              id: selectedCarrierData.id,
+              name: selectedCarrierData.name,
+              email: (selectedCarrierData as any).email || null,
+            } : null,
+          }
+
+          await api.post('/emails/load-order-notification', {
+            loadOrder: loadOrderForEmail,
+            entries: entriesForEmail,
+          })
+        } catch (emailError) {
+          console.error('Error sending load order notification:', emailError)
+          // Don't throw - continue with navigation even if email fails
+        }
+
+        // If status is "salida", also send exit notification
+        if (selectedStatus === "salida") {
+          try {
+            await api.post('/emails/exit-notification', { load_order_id: loadOrder.id })
+          } catch (exitEmailError) {
+            console.error('Error sending exit notification:', exitEmailError)
+          }
+        }
       }
 
-      router.push("/operations/load-orders")
+      // Redirect to exits list if status is salida, otherwise to load orders
+      if (selectedStatus === "salida") {
+        router.push("/operations/exits")
+      } else {
+        router.push("/operations/load-orders")
+      }
     } catch (err) {
       console.error("Error creating load order:", err)
       setError(err instanceof Error ? err.message : "An error occurred")
@@ -391,6 +388,17 @@ export default function Page() {
                   onChange={(e) => setPedimentoInvoice(e.target.value)}
                   placeholder="Enter pedimento or invoice number"
                   required
+                />
+              </div>
+
+              <div className="grid gap-2 md:col-span-2">
+                <Label htmlFor="notes">Notes</Label>
+                <Textarea
+                  id="notes"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Additional notes for the load order..."
+                  rows={3}
                 />
               </div>
             </div>

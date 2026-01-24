@@ -33,14 +33,30 @@ async function LoadOrdersContent() {
   const getStatusVariant = (status: string) => {
     switch (status) {
       case "completed":
+      case "salida":
+      case "shipped":
         return "default"
       case "in_progress":
+      case "pendiente":
+      case "pending":
         return "secondary"
       case "cancelled":
         return "destructive"
       default:
         return "outline"
     }
+  }
+
+  const translateStatus = (status: string) => {
+    const translations: Record<string, string> = {
+      'pendiente': 'Pending',
+      'recibido': 'Received',
+      'salida': 'Shipped',
+      'pending': 'Pending',
+      'received': 'Received',
+      'shipped': 'Shipped',
+    }
+    return translations[status.toLowerCase()] || status
   }
 
   return (
@@ -79,7 +95,7 @@ async function LoadOrdersContent() {
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
                       <p className="font-medium">{order.order_number}</p>
-                      <Badge variant={getStatusVariant(order.status)}>{order.status}</Badge>
+                      <Badge variant={getStatusVariant(order.status)}>{translateStatus(order.status)}</Badge>
                     </div>
                     <p className="text-sm text-muted-foreground">
                       {order.clients?.name || (order as any).client?.name || "No client"} • {order.carriers?.name || (order as any).carrier?.name || "No carrier"}

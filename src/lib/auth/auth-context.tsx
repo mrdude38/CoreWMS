@@ -58,37 +58,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const loadProfile = async () => {
     try {
       // Load profile from backend API
-      const response = await api.get<{
-        user: { id: string; email: string };
-        profile: UserProfile;
-      }>('/me')
+      const response = await api.get<UserProfile>('/auth/me')
 
       if (response.error) {
-        // Fallback to Supabase direct query if backend fails
-        const supabase = createClient()
-        const { data: { user: currentUser } } = await supabase.auth.getUser()
-        
-        if (currentUser) {
-          const { data, error } = await supabase
-            .from('user_profiles')
-            .select('*')
-            .eq('id', currentUser.id)
-            .single()
-
-          if (!error && data) {
-            const userProfile = data as UserProfile
-            setProfile(userProfile)
-            setAbility(defineAbilityFor(userProfile))
-            return
-          }
-        }
-        
+        console.error('Error loading profile from API:', response.error)
         throw new Error(response.error)
       }
 
-      if (response.data?.profile) {
-        setProfile(response.data.profile)
-        setAbility(defineAbilityFor(response.data.profile))
+      if (response.data) {
+        setProfile(response.data)
+        setAbility(defineAbilityFor(response.data))
       }
     } catch (error) {
       console.error('Error loading profile:', error)
@@ -112,11 +91,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setProfile(null)
       setAbility(defineAbilityFor(null))
 
-      // Call backend signout
+      // Call backend logout
       try {
-        await api.post('/auth/signout')
+        await api.post('/auth/logout')
       } catch {
-        // Ignore backend signout errors
+        // Ignore backend logout errors
       }
 
       // Sign out from Supabase (this clears the auth cookies)

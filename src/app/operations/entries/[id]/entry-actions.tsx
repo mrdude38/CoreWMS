@@ -3,10 +3,10 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Mail, Loader2 } from "lucide-react"
-import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { ProtectedEditButton } from "@/components/protected-edit-button"
 import { ProtectedDeleteButton } from "@/components/protected-delete-button"
+import { api } from "@/lib/api"
 
 interface EntryActionsProps {
   entryId: string
@@ -25,10 +25,9 @@ export function EntryActions({ entryId, entryNumber }: EntryActionsProps) {
 
     setDeleting(true)
     try {
-      const supabase = createClient()
-      const { error } = await supabase.from("entries").delete().eq("id", entryId)
+      const response = await api.delete(`/entries/${entryId}`)
 
-      if (error) throw error
+      if (response.error) throw new Error(response.error)
 
       router.push("/operations/entries")
       router.refresh()
@@ -42,20 +41,13 @@ export function EntryActions({ entryId, entryNumber }: EntryActionsProps) {
   const handleResendEmail = async () => {
     setSendingEmail(true)
     try {
-      const response = await fetch('/api/emails/entry-notification', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ entryId }),
-        credentials: 'include',
-      })
+      const response = await api.post('/emails/entry-notification', { entryId })
 
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to send email')
+      if (response.error) {
+        throw new Error(response.error)
       }
 
-      const successCount = data.results?.filter((r: any) => r.success).length || 0
+      const successCount = (response.data as any)?.results?.filter((r: any) => r.success).length || 0
       alert(`Email notification sent successfully! (${successCount} emails sent)`)
     } catch (err) {
       console.error("Error sending email:", err)

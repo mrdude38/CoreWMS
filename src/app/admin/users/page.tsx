@@ -1,6 +1,6 @@
 import { Suspense } from "react"
 import Link from "next/link"
-import { Plus, Mail, CheckCircle2, XCircle } from "lucide-react"
+import { Plus, Mail, CheckCircle2, XCircle, Pencil } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -107,9 +107,13 @@ async function UsersContent() {
                       <Mail className="h-3 w-3" />
                       <span>{user.email}</span>
                       {user.email_confirmed ? (
-                        <CheckCircle2 className="h-3 w-3 text-green-600" title="Email verified" />
+                        <span title="Email verified">
+                          <CheckCircle2 className="h-3 w-3 text-green-600" />
+                        </span>
                       ) : (
-                        <XCircle className="h-3 w-3 text-amber-500" title="Email not verified" />
+                        <span title="Email not verified">
+                          <XCircle className="h-3 w-3 text-amber-500" />
+                        </span>
                       )}
                     </div>
                     <div className="flex gap-2 items-center">
@@ -126,9 +130,17 @@ async function UsersContent() {
                       </p>
                     )}
                   </div>
-                  <div className="text-sm text-muted-foreground text-right">
-                    <p>Created: {formatDate(user.created_at)}</p>
-                    <p>Last login: {formatDate(user.last_sign_in)}</p>
+                  <div className="flex items-center gap-4">
+                    <div className="text-sm text-muted-foreground text-right">
+                      <p>Created: {formatDate(user.created_at)}</p>
+                      <p>Last login: {formatDate(user.last_sign_in)}</p>
+                    </div>
+                    <Button asChild variant="outline" size="sm">
+                      <Link href={`/admin/users/${user.id}/edit`}>
+                        <Pencil className="mr-2 h-4 w-4" />
+                        Edit
+                      </Link>
+                    </Button>
                   </div>
                 </div>
               ))}
