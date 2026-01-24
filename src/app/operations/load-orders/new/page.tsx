@@ -129,8 +129,7 @@ export default function Page() {
           packages_assigned: entry.packages_assigned || 0,
           packages_available: entry.packages_available || entry.total_packages,
         } as EntryWithAvailability
-        })
-      )
+      })
 
       // Filter out entries with no available inventory
       const availableEntries = entriesWithAvailability.filter(entry => entry.packages_available > 0)
