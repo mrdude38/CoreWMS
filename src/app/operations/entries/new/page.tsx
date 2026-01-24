@@ -84,9 +84,20 @@ export default function Page() {
   }
 
   const filterSuppliersByClient = async (clientId: string) => {
-    // TODO: Implement client_suppliers table later
-    // For now, show all suppliers
-    setFilteredSuppliers(suppliers)
+    // Query entries to find suppliers that have been used by this client
+    const response = await api.get<{ id: string; supplier_id: string }[]>('/entries/suppliers-by-client', { client_id: clientId })
+    
+    if (response.data && response.data.length > 0) {
+      // Get unique supplier IDs used by this client
+      const usedSupplierIds = new Set(response.data.map(e => e.supplier_id).filter(Boolean))
+      
+      // Filter suppliers to only show those used by this client
+      const filtered = suppliers.filter(s => usedSupplierIds.has(s.id))
+      setFilteredSuppliers(filtered.length > 0 ? filtered : suppliers)
+    } else {
+      // If no entries exist for this client, show all suppliers
+      setFilteredSuppliers(suppliers)
+    }
   }
 
   const handleAddSupplier = async () => {

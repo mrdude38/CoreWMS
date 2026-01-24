@@ -108,9 +108,9 @@ export default function Page() {
   const getStatusLabel = (status: string) => {
     switch (status) {
       case "pendiente":
-        return "Pendiente"
+        return "Pending"
       case "salida":
-        return "Salida"
+        return "Shipped"
       default:
         return status
     }
@@ -194,6 +194,18 @@ export default function Page() {
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Pedimento/Invoice Number</p>
                   <p className="text-base">{loadOrder.pedimento_invoice_number}</p>
+                </div>
+              )}
+              {loadOrder.economic_number && (
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Economic Number</p>
+                  <p className="text-base">{loadOrder.economic_number}</p>
+                </div>
+              )}
+              {loadOrder.notes && (
+                <div className="md:col-span-2">
+                  <p className="text-sm font-medium text-muted-foreground">Notes</p>
+                  <p className="text-base">{loadOrder.notes}</p>
                 </div>
               )}
             </div>

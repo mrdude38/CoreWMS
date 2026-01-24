@@ -70,7 +70,8 @@ export default function Page() {
     setLoading(true)
     const supabase = createClient()
 
-    let query = supabase
+    // Get all received entries
+    let entriesQuery = supabase
       .from("entries")
       .select(
         `
@@ -84,12 +85,48 @@ export default function Page() {
       .eq("status", "recibido")
 
     if (inventoryClient !== "all") {
-      query = query.eq("client_id", inventoryClient)
+      entriesQuery = entriesQuery.eq("client_id", inventoryClient)
     }
 
-    const { data, error } = await query.order("entry_date", { ascending: false })
+    const { data: entries, error: entriesError } = await entriesQuery.order("entry_date", { ascending: false })
 
-    if (data) setInventoryData(data)
+    if (!entries || entries.length === 0) {
+      setInventoryData([])
+      setLoading(false)
+      return
+    }
+
+    // Get shipped packages from load_order_items for shipped load orders (status = 'salida')
+    const { data: shippedItems, error: shippedError } = await supabase
+      .from("load_order_items")
+      .select(`
+        entry_id,
+        packages_quantity,
+        load_order:load_orders!inner(status)
+      `)
+      .eq("load_order.status", "salida")
+
+    // Calculate shipped packages per entry
+    const shippedByEntry = new Map<string, number>()
+    for (const item of shippedItems || []) {
+      const current = shippedByEntry.get(item.entry_id) || 0
+      shippedByEntry.set(item.entry_id, current + (item.packages_quantity || 0))
+    }
+
+    // Filter out entries where all packages have been shipped and add availability fields
+    const inventoryWithAvailability = entries
+      .map((entry: any) => {
+        const shipped = shippedByEntry.get(entry.id) || 0
+        const available = (entry.total_packages || 0) - shipped
+        return {
+          ...entry,
+          shipped_packages: shipped,
+          available_packages: available,
+        }
+      })
+      .filter((entry: any) => entry.available_packages > 0)
+
+    setInventoryData(inventoryWithAvailability)
     setLoading(false)
   }
 
@@ -104,7 +141,7 @@ export default function Page() {
         supplier:suppliers(name),
         carrier:carriers(name),
         package_type:package_types(name),
-        received_by_user:users(name)
+        received_by_user:user_profiles(full_name)
       `,
     )
 
@@ -134,41 +171,88 @@ export default function Page() {
     setLoading(true)
     const supabase = createClient()
 
-    let query = supabase
+    // Query load orders with client and carrier
+    let loadOrdersQuery = supabase
       .from("load_orders")
-      .select(
-        `
-        *,
+      .select(`
+        id,
+        order_number,
+        status,
+        total_packages,
+        pedimento_invoice_number,
+        economic_number,
+        created_at,
         client:clients(name),
-        carrier:carriers(name),
-        entry:entries(entry_number, package_type_id, package_type:package_types(name))
-      `,
-      )
+        carrier:carriers(name)
+      `)
       .eq("status", "salida")
 
     if (exitsClient !== "all") {
-      query = query.eq("client_id", exitsClient)
+      loadOrdersQuery = loadOrdersQuery.eq("client_id", exitsClient)
     }
 
     if (exitsStartDate) {
-      query = query.gte("created_at", exitsStartDate)
+      loadOrdersQuery = loadOrdersQuery.gte("created_at", exitsStartDate)
     }
 
     if (exitsEndDate) {
-      query = query.lte("created_at", exitsEndDate)
+      loadOrdersQuery = loadOrdersQuery.lte("created_at", exitsEndDate)
     }
 
-    const { data, error } = await query.order("created_at", { ascending: false })
+    const { data: loadOrders, error: loadOrdersError } = await loadOrdersQuery.order("created_at", { ascending: false })
 
-    if (data) {
-      // Filter by package type if selected
-      if (exitsPackageType !== "all") {
-        const filtered = data.filter((exit: any) => exit.entry?.package_type_id === exitsPackageType)
-        setExitsData(filtered)
-      } else {
-        setExitsData(data)
+    if (!loadOrders || loadOrders.length === 0) {
+      setExitsData([])
+      setLoading(false)
+      return
+    }
+
+    // Query load_order_items with entry details for those load orders
+    const loadOrderIds = loadOrders.map((lo: any) => lo.id)
+    const { data: items, error: itemsError } = await supabase
+      .from("load_order_items")
+      .select(`
+        load_order_id,
+        packages_quantity,
+        entry:entries(
+          entry_number,
+          package_type_id,
+          package_type:package_types(id, name)
+        )
+      `)
+      .in("load_order_id", loadOrderIds)
+
+    // Group items by load_order_id and combine entry numbers and package types
+    const itemsByLoadOrder = new Map<string, any[]>()
+    for (const item of items || []) {
+      const existing = itemsByLoadOrder.get(item.load_order_id) || []
+      existing.push(item)
+      itemsByLoadOrder.set(item.load_order_id, existing)
+    }
+
+    // Build combined exit data
+    let exitsWithItems = loadOrders.map((lo: any) => {
+      const loItems = itemsByLoadOrder.get(lo.id) || []
+      const entryNumbers = loItems.map((item: any) => item.entry?.entry_number).filter(Boolean)
+      const packageTypes = [...new Set(loItems.map((item: any) => item.entry?.package_type?.name).filter(Boolean))]
+      const packageTypeIds = loItems.map((item: any) => item.entry?.package_type_id).filter(Boolean)
+      
+      return {
+        ...lo,
+        entries: entryNumbers.join(", ") || "-",
+        package_types: packageTypes.join(", ") || "-",
+        package_type_ids: packageTypeIds,
       }
+    })
+
+    // Filter by package type if selected
+    if (exitsPackageType !== "all") {
+      exitsWithItems = exitsWithItems.filter((exit: any) => 
+        exit.package_type_ids.includes(exitsPackageType)
+      )
     }
+
+    setExitsData(exitsWithItems)
     setLoading(false)
   }
 
@@ -311,7 +395,8 @@ export default function Page() {
                         <TableHead>Client</TableHead>
                         <TableHead>Supplier</TableHead>
                         <TableHead>Carrier</TableHead>
-                        <TableHead>Packages</TableHead>
+                        <TableHead>Available</TableHead>
+                        <TableHead>Total</TableHead>
                         <TableHead>Package Type</TableHead>
                         <TableHead>Weight (lbs)</TableHead>
                         <TableHead>Entry Date</TableHead>
@@ -324,6 +409,7 @@ export default function Page() {
                           <TableCell>{item.client?.name}</TableCell>
                           <TableCell>{item.supplier?.name}</TableCell>
                           <TableCell>{item.carrier?.name || "-"}</TableCell>
+                          <TableCell className="font-medium text-green-600">{item.available_packages}</TableCell>
                           <TableCell>{item.total_packages}</TableCell>
                           <TableCell>{item.package_type?.name || "-"}</TableCell>
                           <TableCell>{item.total_weight?.toFixed(2)}</TableCell>
@@ -438,7 +524,7 @@ export default function Page() {
                           <TableCell>{entry.total_packages}</TableCell>
                           <TableCell>{entry.package_type?.name || "-"}</TableCell>
                           <TableCell>{entry.total_weight?.toFixed(2)}</TableCell>
-                          <TableCell>{entry.received_by_user?.name || "-"}</TableCell>
+                          <TableCell>{entry.received_by_user?.full_name || "-"}</TableCell>
                           <TableCell>{format(new Date(entry.entry_date), "MMM dd, yyyy")}</TableCell>
                           <TableCell>{entry.is_damaged ? "Yes" : "No"}</TableCell>
                         </TableRow>
@@ -527,10 +613,10 @@ export default function Page() {
                       <TableRow>
                         <TableHead>Order Number</TableHead>
                         <TableHead>Client</TableHead>
-                        <TableHead>Entry Number</TableHead>
+                        <TableHead>Entries</TableHead>
                         <TableHead>Carrier</TableHead>
                         <TableHead>Packages</TableHead>
-                        <TableHead>Package Type</TableHead>
+                        <TableHead>Package Types</TableHead>
                         <TableHead>Pedimento/Invoice</TableHead>
                         <TableHead>Exit Date</TableHead>
                       </TableRow>
@@ -540,10 +626,10 @@ export default function Page() {
                         <TableRow key={exit.id}>
                           <TableCell className="font-medium">{exit.order_number}</TableCell>
                           <TableCell>{exit.client?.name}</TableCell>
-                          <TableCell>{exit.entry?.entry_number}</TableCell>
+                          <TableCell>{exit.entries}</TableCell>
                           <TableCell>{exit.carrier?.name}</TableCell>
                           <TableCell>{exit.total_packages}</TableCell>
-                          <TableCell>{exit.entry?.package_type?.name || "-"}</TableCell>
+                          <TableCell>{exit.package_types}</TableCell>
                           <TableCell>{exit.pedimento_invoice_number || "-"}</TableCell>
                           <TableCell>{format(new Date(exit.created_at), "MMM dd, yyyy")}</TableCell>
                         </TableRow>

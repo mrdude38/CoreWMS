@@ -33,7 +33,7 @@ async function ShipmentsContent() {
       </div>
 
       <div className="mb-6">
-        <h1 className="text-3xl font-bold tracking-tight">Shipments (Salidas)</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Shipments</h1>
         <p className="text-muted-foreground">Load orders that have been dispatched</p>
       </div>
 
@@ -55,7 +55,7 @@ async function ShipmentsContent() {
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
                       <p className="font-medium">{order.order_number}</p>
-                      <Badge variant="default">Salida</Badge>
+                      <Badge variant="default">Shipped</Badge>
                     </div>
                     <p className="text-sm text-muted-foreground">
                       {(order as any).clients?.name || "No client"} • {(order as any).carriers?.name || "No carrier"}

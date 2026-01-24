@@ -7,6 +7,7 @@ import { useAbility } from "@/lib/casl/ability-context"
 import { ArrowLeft, Mail, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -27,6 +28,7 @@ export default function Page() {
 
   const [loadOrder, setLoadOrder] = useState<any>(null)
   const [selectedStatus, setSelectedStatus] = useState<string>("pendiente")
+  const [economicNumber, setEconomicNumber] = useState<string>("")
   const [notes, setNotes] = useState<string>("")
 
   // Permission check is done after data loads to check if it's an exit
@@ -48,6 +50,7 @@ export default function Page() {
       const orderData = response.data
       setLoadOrder(orderData)
       setSelectedStatus(orderData.status)
+      setEconomicNumber(orderData.economic_number || "")
       setNotes(orderData.notes || "")
 
       // Check permissions - exits (status=salida) can only be edited by admin
@@ -103,6 +106,7 @@ export default function Page() {
     try {
       const response = await api.patch(`/load-orders/${loadOrderId}`, {
         status: selectedStatus,
+        economic_number: economicNumber.trim() || null,
         notes: notes.trim() || null,
       })
 
@@ -189,6 +193,16 @@ export default function Page() {
                   </span>
                 </div>
               )}
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="economic_number">Economic Number</Label>
+              <Input
+                id="economic_number"
+                value={economicNumber}
+                onChange={(e) => setEconomicNumber(e.target.value)}
+                placeholder="Enter economic number"
+              />
             </div>
 
             <div className="grid gap-2">

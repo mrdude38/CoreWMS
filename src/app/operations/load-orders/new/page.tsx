@@ -52,6 +52,7 @@ export default function Page() {
   const [selectedCarrier, setSelectedCarrier] = useState<string>("")
   const [selectedStatus, setSelectedStatus] = useState<string>("pendiente")
   const [pedimentoInvoice, setPedimentoInvoice] = useState<string>("")
+  const [economicNumber, setEconomicNumber] = useState<string>("")
   const [notes, setNotes] = useState<string>("")
 
   // Selected entries with their quantities
@@ -239,6 +240,7 @@ export default function Page() {
         status: selectedStatus,
         total_packages: getTotalPackages(),
         pedimento_invoice_number: pedimentoInvoice || null,
+        economic_number: economicNumber.trim() || null,
         notes: notes.trim() || null,
         items: items,
       })
@@ -388,6 +390,16 @@ export default function Page() {
                   onChange={(e) => setPedimentoInvoice(e.target.value)}
                   placeholder="Enter pedimento or invoice number"
                   required
+                />
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="economic_number">Economic Number</Label>
+                <Input
+                  id="economic_number"
+                  value={economicNumber}
+                  onChange={(e) => setEconomicNumber(e.target.value)}
+                  placeholder="Enter economic number"
                 />
               </div>
 

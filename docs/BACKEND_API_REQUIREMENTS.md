@@ -18,6 +18,11 @@ This document outlines the backend API endpoints and their current implementatio
 | `POST /api/emails/exit-notification` | ✅ Implemented | Sends exit notification via Resend API |
 | `POST /api/emails/send-revision` | ✅ Implemented | Sends revision email with CSV attachment |
 | `POST /api/emails/load-order-notification` | ✅ Implemented | Sends load order notification email |
+| `GET /api/entries/suppliers-by-client` | ✅ Implemented | Filter suppliers by client usage |
+| `GET /api/entries/available-for-load-order` | ✅ Implemented | Get entries available for load orders |
+| `POST /api/load-orders` | ✅ Implemented | Create load order with items (includes economic_number) |
+| `PATCH /api/load-orders/:id` | ✅ Implemented | Update load order (includes economic_number) |
+| `GET /api/load-orders/:id` | ✅ Implemented | Get load order with items (includes economic_number) |
 
 ## Environment Variables Required
 
@@ -390,15 +395,59 @@ Send exit notification email when a load order status changes to "salida".
 ```
 
 **Business Logic:**
-- Fetch load order with client and carrier details
-- Fetch all entries associated with the load order
-- For each entry, generate:
-  - Entry PDF document
-  - Revision Excel (if revision exists)
-  - Fetch invoice attachment (if exists)
-- Generate exit cover sheet PDF
-- Send email to client with all attachments
-- Also CC operations team (e.g., invoices@core-logistics.com)
+1. Fetch load order with client and carrier details (including `economic_number`)
+2. Fetch all entries associated with the load order via `load_order_items` junction table
+3. For each entry, collect:
+   - Entry details (entry_number, description, supplier, tracking, etc.)
+   - Revision data if `has_revision = true` (from `entry_revisions` table)
+   - Invoice attachment if `has_invoice = true`
+   - Any other attachments from `entry_attachments` table
+4. Generate exit cover sheet PDF using `ExitCoverSheetPDF` component (includes `economic_number`)
+5. Generate Excel revision files for entries with revisions
+6. Compile email using `ExitNotification` email template (includes `economic_number`)
+7. Send email to client with all attachments via Resend API
+8. Return success with attachment count
+
+**Templates Used:**
+- Email: `src/emails/exit-notification.tsx`
+- PDF: `src/lib/pdf/exit-cover-sheet-pdf.tsx`
+
+**Data Structure for Email Template:**
+```typescript
+interface ExitNotificationProps {
+  order_number: string
+  client_name: string
+  carrier_name?: string
+  total_packages: number
+  exit_date: string
+  destination?: string
+  pedimento_invoice_number?: string
+  economic_number?: string  // NEW FIELD
+  entries: EntryInfo[]
+  attachments_summary: {
+    entry_pdfs: number
+    invoices: number
+    revisions: number
+    other_attachments: number
+  }
+}
+```
+
+**Data Structure for PDF Template:**
+```typescript
+interface ExitCoverSheetPDFProps {
+  order_number: string
+  client_name: string
+  carrier_name?: string
+  total_packages: number
+  exit_date: string
+  destination?: string
+  pedimento_invoice_number?: string
+  economic_number?: string  // NEW FIELD
+  entries: EntryInfo[]
+  logoUrl?: string
+}
+```
 
 ---
 
@@ -502,6 +551,12 @@ Add the following columns if not present:
 ### load_orders table
 Ensure the following columns exist:
 - `notes` (text, nullable) - Additional notes for load orders
+- `economic_number` (text, nullable) - Economic number for the load order
+
+```sql
+-- Add economic_number column to load_orders table
+ALTER TABLE load_orders ADD COLUMN IF NOT EXISTS economic_number TEXT;
+```
 
 ### entry_revision_items table
 Add the following column if not present:
@@ -665,7 +720,69 @@ POST   /api/entries                    - Create entry (including attachments)
 GET    /api/entries/:id                - Get entry with all relations
 PATCH  /api/entries/:id                - Update entry
 DELETE /api/entries/:id                - Delete entry
+GET    /api/entries/suppliers-by-client - Get suppliers used by a specific client
+GET    /api/entries/available-for-load-order - Get entries available for load orders
 ```
+
+#### GET `/api/entries/suppliers-by-client`
+Get list of suppliers that have been used in entries for a specific client.
+
+**Query Parameters:**
+- `client_id` (required): The client ID to filter by
+
+**Response (200):**
+```json
+[
+  {
+    "id": "entry-uuid",
+    "supplier_id": "supplier-uuid"
+  }
+]
+```
+
+**Business Logic:**
+1. Query entries table for all entries matching the client_id
+2. Return distinct supplier_id values
+3. Frontend will use this to filter the suppliers dropdown to only show suppliers previously used by that client
+
+**SQL Query:**
+```sql
+SELECT DISTINCT id, supplier_id 
+FROM entries 
+WHERE client_id = :client_id 
+  AND supplier_id IS NOT NULL;
+```
+
+---
+
+#### GET `/api/entries/available-for-load-order`
+Get entries with status 'recibido' that have available packages for load orders.
+
+**Query Parameters:**
+- `client_id` (optional): Filter by client
+
+**Response (200):**
+```json
+[
+  {
+    "id": "uuid",
+    "entry_number": "E-2024-0001",
+    "client_id": "uuid",
+    "total_packages": 100,
+    "packages_available": 75,
+    "packages_assigned": 25,
+    ...other entry fields
+  }
+]
+```
+
+**Business Logic:**
+1. Query entries with status = 'recibido'
+2. For each entry, calculate packages already assigned to non-cancelled load order items
+3. Calculate packages_available = total_packages - packages_assigned
+4. Only return entries where packages_available > 0
+
+---
 
 ### Load Orders API
 
@@ -676,6 +793,113 @@ GET    /api/load-orders/:id            - Get load order with items/entries
 PATCH  /api/load-orders/:id            - Update load order
 DELETE /api/load-orders/:id            - Delete load order
 ```
+
+#### POST `/api/load-orders`
+Create a new load order with associated items.
+
+**Request Body:**
+```json
+{
+  "client_id": "uuid",
+  "carrier_id": "uuid",
+  "status": "pendiente" | "salida",
+  "total_packages": 100,
+  "pedimento_invoice_number": "string | null",
+  "economic_number": "string | null",
+  "notes": "string | null",
+  "items": [
+    {
+      "entry_id": "uuid",
+      "packages_quantity": 50,
+      "is_partial": false
+    }
+  ]
+}
+```
+
+**Response (201):**
+```json
+{
+  "id": "uuid",
+  "order_number": "LO-2024-0001"
+}
+```
+
+**Business Logic:**
+1. Generate order_number (auto-increment or formatted)
+2. Insert load_order record
+3. Insert load_order_items for each item in the items array
+4. Return created load order
+
+---
+
+#### PATCH `/api/load-orders/:id`
+Update a load order.
+
+**Request Body:**
+```json
+{
+  "status": "pendiente" | "salida",
+  "economic_number": "string | null",
+  "notes": "string | null"
+}
+```
+
+**Response (200):**
+```json
+{
+  "success": true
+}
+```
+
+**Business Logic:**
+1. Validate load order exists
+2. Update only provided fields
+3. If status changes to 'salida', the frontend will trigger exit notification separately
+
+---
+
+#### GET `/api/load-orders/:id`
+Get load order with all related data.
+
+**Response (200):**
+```json
+{
+  "id": "uuid",
+  "order_number": "LO-2024-0001",
+  "client_id": "uuid",
+  "carrier_id": "uuid",
+  "status": "pendiente",
+  "total_packages": 100,
+  "pedimento_invoice_number": "string | null",
+  "economic_number": "string | null",
+  "notes": "string | null",
+  "created_at": "timestamp",
+  "updated_at": "timestamp",
+  "clients": {
+    "id": "uuid",
+    "name": "Client Name"
+  },
+  "carriers": {
+    "id": "uuid",
+    "name": "Carrier Name"
+  },
+  "items": [
+    {
+      "id": "uuid",
+      "entry_id": "uuid",
+      "packages_quantity": 50,
+      "is_partial": false,
+      "entries": {
+        "entry_number": "E-2024-0001",
+        "total_packages": 100
+      }
+    }
+  ]
+}
+```
+
+---
 
 ### Revisions API
 
