@@ -9,24 +9,8 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { LogIn } from "lucide-react"
-import { createClient } from "@/lib/supabase/client"
-
-interface LoginResponse {
-  user: {
-    id: string
-    email: string
-    full_name: string
-    role: string
-    client_id: string | null
-    is_active: boolean
-  }
-  session: {
-    access_token: string
-    refresh_token: string
-    expires_in: number
-    expires_at: number
-  }
-}
+import { authApi } from "@/lib/api"
+import { setAccessToken } from "@/lib/auth/token-cookie"
 
 function LoginForm() {
   const router = useRouter()
@@ -45,34 +29,16 @@ function LoginForm() {
     setError(null)
 
     try {
-      // Call backend login API
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-      })
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Invalid email or password')
+      const response = await authApi.signIn({ email, password })
+      if (response.error || !response.data?.access_token) {
+        throw new Error(response.error || "Invalid email or password")
       }
-
-      const loginData = data as LoginResponse
-
-      // Set the session in Supabase client so cookies are properly set
-      const supabase = createClient()
-      await supabase.auth.setSession({
-        access_token: loginData.session.access_token,
-        refresh_token: loginData.session.refresh_token,
-      })
-
-      // Redirect to original destination or dashboard
+      setAccessToken(response.data.access_token)
       router.push(redirect)
       router.refresh()
     } catch (err) {
-      console.error('Login error:', err)
-      setError(err instanceof Error ? err.message : 'Invalid email or password')
+      console.error("Login error:", err)
+      setError(err instanceof Error ? err.message : "Invalid email or password")
     } finally {
       setLoading(false)
     }

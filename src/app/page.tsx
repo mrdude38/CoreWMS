@@ -5,74 +5,37 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { createClient } from "@/lib/supabase/server"
+import { getCurrentUserProfile } from "@/lib/auth/server-auth"
+import { serverApi } from "@/lib/api/server"
 import { ProtectedNewButton } from "@/components/protected-new-button"
 
-async function getUserProfile() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  
-  if (!user) {
-    return null
-  }
-
-  const { data: profile } = await supabase
-    .from('user_profiles')
-    .select('*')
-    .eq('id', user.id)
-    .single()
-
-  return profile
-}
-
-async function getDashboardData(role: string, clientId?: string | null) {
-  const supabase = await createClient()
-
-  const today = new Date().toISOString().split("T")[0]
-
-  // Build queries based on role
-  let loadOrdersQuery = supabase
-    .from("load_orders")
-    .select("*, clients(name), carriers(name)")
-    .eq("status", "pendiente")
-    .order("created_at", { ascending: false })
-    .limit(5)
-
-  let entriesQuery = supabase
-    .from("entries")
-    .select("*", { count: "exact" })
-    .eq("entry_date", today)
-
-  // Client users can only see their own data
-  if (role === 'client' && clientId) {
-    loadOrdersQuery = loadOrdersQuery.eq('client_id', clientId)
-    entriesQuery = entriesQuery.eq('client_id', clientId)
-  }
-
-  const [{ data: openLoadOrders }, { data: todayEntries, count: todayEntriesCount }] = await Promise.all([
-    loadOrdersQuery,
-    entriesQuery,
-  ])
-
-  return {
-    openLoadOrders: openLoadOrders || [],
-    todayEntriesCount: todayEntriesCount || 0,
-  }
+interface DashboardResponse {
+  open_load_orders?: Array<{
+    id: string
+    order_number: string
+    status: string
+    total_packages?: number
+    client?: { name?: string }
+    carrier?: { name?: string }
+  }>
+  today_entries_count?: number
 }
 
 async function DashboardContent() {
-  const profile = await getUserProfile()
+  const profile = await getCurrentUserProfile()
 
   if (!profile) {
-    redirect('/auth/login')
+    redirect("/auth/login")
   }
 
-  // Client users should be redirected to entries page
-  if (profile.role === 'client') {
-    redirect('/operations/entries')
+  if (profile.role === "client") {
+    redirect("/operations/entries")
   }
 
-  const { openLoadOrders, todayEntriesCount } = await getDashboardData(profile.role, profile.client_id)
+  const dashRes = await serverApi.get<DashboardResponse>("dashboard")
+  const data = (dashRes as any).data ?? dashRes
+  const openLoadOrders: Array<{ id: string; order_number: string; status: string; total_packages?: number; client?: { name?: string }; carrier?: { name?: string }; clients?: { name?: string }; carriers?: { name?: string } }> = Array.isArray((data as any).open_load_orders) ? (data as any).open_load_orders : []
+  const todayEntriesCount = Number((data as any).today_entries_count) || 0
 
   const isAdmin = profile.role === 'admin'
   const isManager = profile.role === 'manager'
@@ -110,7 +73,7 @@ async function DashboardContent() {
             <TruckIcon className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{openLoadOrders.length}</div>
+            <div className="text-2xl font-bold">{openLoadOrders?.length ?? 0}</div>
             <p className="text-xs text-muted-foreground">Active orders awaiting dispatch</p>
           </CardContent>
         </Card>
@@ -162,11 +125,11 @@ async function DashboardContent() {
             <CardDescription>Active orders awaiting completion</CardDescription>
           </CardHeader>
           <CardContent>
-            {openLoadOrders.length === 0 ? (
+            {(openLoadOrders?.length ?? 0) === 0 ? (
               <div className="text-center py-8 text-muted-foreground">No open load orders</div>
             ) : (
               <div className="space-y-4">
-                {openLoadOrders.map((order: any) => (
+                {openLoadOrders.map((order) => (
                   <div
                     key={order.id}
                     className="flex items-center justify-between border-b pb-4 last:border-0 last:pb-0"
@@ -177,9 +140,9 @@ async function DashboardContent() {
                         <Badge variant="secondary">{order.status}</Badge>
                       </div>
                       <p className="text-sm text-muted-foreground">
-                        {order.clients?.name || "No client"} • {order.carriers?.name || "No carrier"}
+                        {(order.client ?? order.clients)?.name ?? "No client"} • {(order.carrier ?? order.carriers)?.name ?? "No carrier"}
                       </p>
-                      <p className="text-xs text-muted-foreground">{order.total_packages} packages</p>
+                      <p className="text-xs text-muted-foreground">{order.total_packages ?? 0} packages</p>
                     </div>
                     <Button asChild variant="outline" size="sm">
                       <Link href={`/operations/load-orders/${order.id}`}>View</Link>

@@ -1,4 +1,4 @@
-import type { Entry } from '@/lib/types';
+import type { Entry, EntryPackageCode } from '@/lib/types';
 import type { ApiResponse, PaginatedResponse } from '../client';
 
 export interface EntryFilters {
@@ -61,6 +61,20 @@ export function createEntryService(api: {
      */
     delete: async (id: string) => {
       return api.delete<{ message: string }>(`/entries/${id}`);
+    },
+
+    /**
+     * Get package codes for an entry (for labels / barcode)
+     */
+    getPackageCodes: async (id: string) => {
+      return api.get<EntryPackageCode[]>(`/entries/${id}/package-codes`);
+    },
+
+    /**
+     * Generate package codes for a received entry (idempotent)
+     */
+    generatePackageCodes: async (id: string) => {
+      return api.post<{ codes?: EntryPackageCode[]; count: number }>(`/entries/${id}/package-codes/generate`);
     },
   };
 }

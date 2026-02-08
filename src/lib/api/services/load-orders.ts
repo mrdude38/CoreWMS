@@ -1,4 +1,4 @@
-import type { LoadOrder } from '@/lib/types';
+import type { LoadOrder, LoadOrderScanVerification } from '@/lib/types';
 import type { ApiResponse, PaginatedResponse } from '../client';
 
 export interface LoadOrderFilters {
@@ -60,6 +60,20 @@ export function createLoadOrderService(api: {
      */
     delete: async (id: string) => {
       return api.delete<{ message: string }>(`/load-orders/${id}`);
+    },
+
+    /**
+     * Get scan verification status for a load order
+     */
+    getScanVerification: async (id: string) => {
+      return api.get<LoadOrderScanVerification>(`/load-orders/${id}/scan-verification`);
+    },
+
+    /**
+     * Record a package code scan
+     */
+    recordScan: async (id: string, scannedCode: string) => {
+      return api.post<{ scanned_code: string }>(`/load-orders/${id}/scan`, { scanned_code: scannedCode });
     },
   };
 }

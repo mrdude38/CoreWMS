@@ -1,9 +1,9 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import Link from "next/link"
 import { useRouter, useParams } from "next/navigation"
-import { ArrowLeft } from "lucide-react"
+import { ArrowLeft, Truck, Loader2, CheckCircle2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -18,9 +18,20 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
-import { createClient } from "@/lib/supabase/client"
 import { ProtectedEditButton } from "@/components/protected-edit-button"
 import { ProtectedDeleteButton } from "@/components/protected-delete-button"
+import { ScanVerificationPanel } from "@/components/barcode/scan-verification-panel"
+import type { LoadOrderScanVerification } from "@/lib/types"
+import { api } from "@/lib/api"
+
+interface LoadOrderItem {
+  id: string
+  entry_id: string
+  packages_quantity: number
+  is_partial?: boolean
+  entry?: { entry_number: string; total_packages: number }
+  entries?: { entry_number: string; total_packages: number }
+}
 
 export default function Page() {
   const router = useRouter()
@@ -30,62 +41,55 @@ export default function Page() {
   const [loadOrder, setLoadOrder] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [deleting, setDeleting] = useState(false)
+  const [shipping, setShipping] = useState(false)
+  const [scanVerification, setScanVerification] = useState<LoadOrderScanVerification | null>(null)
 
-  useEffect(() => {
-    if (id) {
-      loadData()
-    }
-  }, [id])
-
-  const loadData = async () => {
-    const supabase = createClient()
-
-    const { data: orderData } = await supabase
-      .from("load_orders")
-      .select(`
-        *,
-        clients(name),
-        carriers(name)
-      `)
-      .eq("id", id)
-      .single()
-
-    if (!orderData) {
+  const loadData = useCallback(async () => {
+    if (!id) return
+    const res = await api.get<any>(`/load-orders/${id}`)
+    if (res.error || !res.data) {
+      setLoadOrder(null)
       setLoading(false)
       return
     }
-
-    // Get load order items with entry details
-    const { data: items } = await supabase
-      .from("load_order_items")
-      .select(`
-        *,
-        entries(entry_number, total_packages)
-      `)
-      .eq("load_order_id", id)
-
+    const order = res.data
     setLoadOrder({
-      ...orderData,
-      items: items || [],
+      ...order,
+      items: order.items ?? [],
     })
     setLoading(false)
-  }
+  }, [id])
+
+  useEffect(() => {
+    loadData()
+  }, [loadData])
 
   const handleDelete = async () => {
     setDeleting(true)
     try {
-      const supabase = createClient()
-
-      // Delete load order (items will be deleted automatically due to CASCADE)
-      const { error } = await supabase.from("load_orders").delete().eq("id", id)
-
-      if (error) throw error
-
+      const res = await api.delete(`/load-orders/${id}`)
+      if (res.error) throw new Error(res.error)
       router.push("/operations/load-orders")
     } catch (err) {
       console.error("Error deleting load order:", err)
       alert("Error deleting load order")
       setDeleting(false)
+    }
+  }
+
+  const handleShip = async () => {
+    setShipping(true)
+    try {
+      const res = await api.patch(`/load-orders/${id}/status`, { status: "completed" })
+      if (res.error) throw new Error(res.error)
+      await loadData()
+      setScanVerification(null)
+        // Refetch verification (panel will refetch when it re-mounts or we could pass a key)
+    } catch (err) {
+      console.error("Error shipping load order:", err)
+      alert(err instanceof Error ? err.message : "Failed to ship")
+    } finally {
+      setShipping(false)
     }
   }
 
@@ -108,9 +112,14 @@ export default function Page() {
   const getStatusLabel = (status: string) => {
     switch (status) {
       case "pendiente":
+      case "open":
+      case "in_progress":
         return "Pending"
       case "salida":
+      case "completed":
         return "Shipped"
+      case "cancelled":
+        return "Cancelled"
       default:
         return status
     }
@@ -119,13 +128,27 @@ export default function Page() {
   const getStatusVariant = (status: string) => {
     switch (status) {
       case "salida":
+      case "completed":
         return "default"
       case "pendiente":
+      case "open":
+      case "in_progress":
         return "secondary"
       default:
         return "outline"
     }
   }
+
+  const isShipped =
+    loadOrder.status === "salida" || loadOrder.status === "completed"
+  const canShip =
+    !isShipped &&
+    (scanVerification?.can_ship ?? loadOrder.scan_verified === true)
+  const clientName =
+    loadOrder.clients?.name ?? (loadOrder as any).client?.name ?? "N/A"
+  const carrierName =
+    loadOrder.carriers?.name ?? (loadOrder as any).carrier?.name ?? "N/A"
+  const items: LoadOrderItem[] = loadOrder.items ?? []
 
   return (
     <div className="max-w-4xl">
@@ -143,11 +166,21 @@ export default function Page() {
           <h1 className="text-3xl font-bold tracking-tight">Load Order {loadOrder.order_number}</h1>
           <p className="text-muted-foreground">Load order details and information</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          {canShip && (
+            <Button onClick={handleShip} disabled={shipping}>
+              {shipping ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Truck className="mr-2 h-4 w-4" />
+              )}
+              {shipping ? "Shipping..." : "Ship / Mark as Shipped"}
+            </Button>
+          )}
           <ProtectedEditButton
             href={`/operations/load-orders/${loadOrder.id}/edit`}
             label="Edit"
-            subject={loadOrder.status === 'salida' ? 'Exit' : 'LoadOrder'}
+            subject={isShipped ? "Exit" : "LoadOrder"}
           />
           <ProtectedDeleteButton
             onDelete={() => {
@@ -156,7 +189,7 @@ export default function Page() {
               }
             }}
             label="Delete"
-            subject={loadOrder.status === 'salida' ? 'Exit' : 'LoadOrder'}
+            subject={isShipped ? "Exit" : "LoadOrder"}
           />
         </div>
       </div>
@@ -180,12 +213,18 @@ export default function Page() {
               </div>
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Client</p>
-                <p className="text-base">{loadOrder.clients?.name || "N/A"}</p>
+                <p className="text-base">{clientName}</p>
               </div>
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Carrier</p>
-                <p className="text-base">{loadOrder.carriers?.name || "N/A"}</p>
+                <p className="text-base">{carrierName}</p>
               </div>
+              {(loadOrder.scan_verified ?? false) && (
+                <div className="flex items-center gap-1">
+                  <CheckCircle2 className="h-4 w-4 text-green-600" />
+                  <span className="text-sm font-medium text-green-700">Scan verified</span>
+                </div>
+              )}
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Total Packages</p>
                 <p className="text-base">{loadOrder.total_packages || 0}</p>
@@ -212,23 +251,31 @@ export default function Page() {
           </CardContent>
         </Card>
 
+        {/* Scan verification */}
+        {!isShipped && (
+          <ScanVerificationPanel
+            loadOrderId={loadOrder.id}
+            onVerificationChange={setScanVerification}
+          />
+        )}
+
         {/* Entries/Items */}
         <Card>
           <CardHeader>
-            <CardTitle>Entries ({loadOrder.items.length})</CardTitle>
+            <CardTitle>Entries ({items.length})</CardTitle>
             <CardDescription>Entries included in this load order</CardDescription>
           </CardHeader>
           <CardContent>
-            {loadOrder.items.length === 0 ? (
+            {items.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">No entries in this load order</div>
             ) : (
               <div className="space-y-3">
-                {loadOrder.items.map((item: any) => (
+                {items.map((item: LoadOrderItem) => (
                   <div key={item.id} className="flex items-center justify-between p-3 border rounded-lg">
                     <div>
-                      <p className="font-medium">{item.entries?.entry_number || "Unknown Entry"}</p>
+                      <p className="font-medium">{(item.entry ?? item.entries)?.entry_number ?? "Unknown Entry"}</p>
                       <p className="text-sm text-muted-foreground">
-                        {item.packages_quantity} of {item.entries?.total_packages || 0} packages
+                        {item.packages_quantity} of {(item.entry ?? item.entries)?.total_packages ?? 0} packages
                         {item.is_partial && " (Partial)"}
                       </p>
                     </div>

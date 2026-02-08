@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { api } from "@/lib/api"
-import { createClient } from "@/lib/supabase/client"
+import { setAccessToken } from "@/lib/auth/token-cookie"
 import { UserPlus, CheckCircle2 } from "lucide-react"
 
 interface SignupResponse {
@@ -63,25 +63,11 @@ export default function SignupPage() {
         throw new Error(response.error)
       }
 
-      if (response.data?.access_token && response.data?.refresh_token) {
-        // Set the session in Supabase client FIRST
-        const supabase = createClient()
-        const { error: sessionError } = await supabase.auth.setSession({
-          access_token: response.data.access_token,
-          refresh_token: response.data.refresh_token,
-        })
-
-        if (sessionError) {
-          console.error('Session error:', sessionError)
-          throw new Error('Failed to establish session')
-        }
-
-        // Show success message
+      if (response.data?.access_token) {
+        setAccessToken(response.data.access_token)
         setSuccess(true)
-        
-        // Use window.location for a hard redirect to ensure cookies are sent
         setTimeout(() => {
-          window.location.href = '/'
+          window.location.href = "/"
         }, 1500)
       } else {
         throw new Error('No tokens received from server')

@@ -1,17 +1,19 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
+import { Suspense, useState, useEffect } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { createClient } from "@/lib/supabase/client"
+import { api } from "@/lib/api"
+import { clearAccessToken } from "@/lib/auth/token-cookie"
 import { Lock, Loader2 } from "lucide-react"
 
-export default function ResetPasswordPage() {
+function ResetPasswordForm() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
   const [loading, setLoading] = useState(false)
@@ -19,57 +21,15 @@ export default function ResetPasswordPage() {
   const [error, setError] = useState<string | null>(null)
   const [sessionReady, setSessionReady] = useState(false)
 
-  // Handle hash tokens from Supabase recovery link
+  // Backend reset link may pass token in query (e.g. ?token=...)
   useEffect(() => {
-    const handleHashTokens = async () => {
-      try {
-        const supabase = createClient()
-
-        // Check if we have hash parameters (from Supabase redirect)
-        const hash = window.location.hash
-        if (hash && hash.includes('access_token')) {
-          // Parse hash parameters
-          const params = new URLSearchParams(hash.substring(1))
-          const accessToken = params.get('access_token')
-          const refreshToken = params.get('refresh_token')
-
-          if (accessToken && refreshToken) {
-            // Set the session with the tokens from the hash
-            const { error: sessionError } = await supabase.auth.setSession({
-              access_token: accessToken,
-              refresh_token: refreshToken,
-            })
-
-            if (sessionError) {
-              console.error('Session error:', sessionError)
-              setError('Invalid or expired reset link. Please request a new one.')
-              setInitializing(false)
-              return
-            }
-
-            // Clear the hash from the URL for cleaner UX
-            window.history.replaceState(null, '', window.location.pathname)
-            setSessionReady(true)
-          }
-        } else {
-          // No hash params - check if we already have a valid session
-          const { data: { session } } = await supabase.auth.getSession()
-          if (session) {
-            setSessionReady(true)
-          } else {
-            setError('No valid session found. Please request a new password reset link.')
-          }
-        }
-      } catch (err) {
-        console.error('Error initializing session:', err)
-        setError('Failed to initialize session. Please try again.')
-      } finally {
-        setInitializing(false)
-      }
+    const token = searchParams.get("token") ?? new URLSearchParams(typeof window !== "undefined" ? window.location.hash.slice(1) : "").get("access_token")
+    setSessionReady(!!token)
+    setInitializing(false)
+    if (!token) {
+      setError("No valid reset link. Please request a new password reset link.")
     }
-
-    handleHashTokens()
-  }, [])
+  }, [searchParams])
 
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -89,22 +49,19 @@ export default function ResetPasswordPage() {
     }
 
     try {
-      const supabase = createClient()
-
-      const { error: updateError } = await supabase.auth.updateUser({
-        password: password,
-      })
-
-      if (updateError) throw updateError
-
-      // Sign out to clear the recovery session cookies (prevents 431 error)
-      await supabase.auth.signOut()
-
-      // Redirect to login after successful password reset
-      router.push('/auth/login?message=Password updated successfully')
+      const token = searchParams.get("token")
+      if (!token) {
+        setError("Missing reset token. Please use the link from your email.")
+        setLoading(false)
+        return
+      }
+      const response = await api.post("/auth/confirm-reset", { token, new_password: password })
+      if (response.error) throw new Error(response.error)
+      clearAccessToken()
+      router.push("/auth/login?message=Password updated successfully")
     } catch (err) {
-      console.error('Reset password error:', err)
-      setError(err instanceof Error ? err.message : 'Failed to reset password')
+      console.error("Reset password error:", err)
+      setError(err instanceof Error ? err.message : "Failed to reset password")
     } finally {
       setLoading(false)
     }
@@ -205,5 +162,19 @@ export default function ResetPasswordPage() {
         </CardFooter>
       </form>
     </Card>
+  )
+}
+
+export default function ResetPasswordPage() {
+  return (
+    <Suspense fallback={
+      <Card>
+        <CardContent className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </CardContent>
+      </Card>
+    }>
+      <ResetPasswordForm />
+    </Suspense>
   )
 }

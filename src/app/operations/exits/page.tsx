@@ -1,19 +1,14 @@
 import { Suspense } from "react"
+import Link from "next/link"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { createClient } from "@/lib/supabase/server"
-import type { LoadOrder } from "@/lib/types"
+import { serverApi } from "@/lib/api/server"
 
 async function getExits() {
-  const supabase = await createClient()
-  const { data } = await supabase
-    .from("load_orders")
-    .select("*, clients(name), carriers(name), entries(entry_number)")
-    .eq("status", "salida")
-    .order("created_at", { ascending: false })
-
-  return (data || []) as LoadOrder[]
+  const res = await serverApi.get<{ data?: any[] }>("load-orders", { status: "completed" })
+  const raw = (res as any).data ?? res
+  return Array.isArray((raw as any).data) ? (raw as any).data : []
 }
 
 async function ExitsContent() {
@@ -23,19 +18,19 @@ async function ExitsContent() {
     <>
       <div className="mb-6">
         <h1 className="text-3xl font-bold tracking-tight">Exits</h1>
-        <p className="text-muted-foreground">Load orders marked as exits (Salida)</p>
+        <p className="text-muted-foreground">Load orders that have been completed (exits)</p>
       </div>
 
       <Card>
         <CardHeader>
           <CardTitle>All Exits</CardTitle>
-          <CardDescription>View all load orders that have been marked as exits</CardDescription>
+          <CardDescription>View all completed load orders (exits)</CardDescription>
         </CardHeader>
         <CardContent>
           {exits.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
               <p>No exits found</p>
-              <p className="text-sm mt-2">Load orders with status "Salida" will appear here</p>
+              <p className="text-sm mt-2">Completed load orders will appear here</p>
             </div>
           ) : (
             <div className="space-y-4">
@@ -44,19 +39,17 @@ async function ExitsContent() {
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
                       <p className="font-medium">{exit.order_number}</p>
-                      <Badge variant="default">Salida</Badge>
+                      <Badge variant="default">Completed</Badge>
                     </div>
                     <p className="text-sm text-muted-foreground">
-                      {(exit as any).clients?.name || "No client"} • {(exit as any).carriers?.name || "No carrier"}
+                      {(exit.client ?? exit.clients)?.name ?? "No client"} • {(exit.carrier ?? exit.carriers)?.name ?? "No carrier"}
                     </p>
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <span>Entry: {(exit as any).entries?.entry_number || "N/A"}</span>
-                      <span>•</span>
-                      <span>{exit.total_packages} packages</span>
+                      <span>{exit.total_packages ?? 0} packages</span>
                     </div>
                   </div>
-                  <Button variant="outline" size="sm">
-                    View Details
+                  <Button asChild variant="outline" size="sm">
+                    <Link href={`/operations/load-orders/${exit.id}`}>View Details</Link>
                   </Button>
                 </div>
               ))}

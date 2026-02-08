@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
+import type { LoadOrderScanVerification } from "@/lib/types"
 import { api } from "@/lib/api"
 
 export default function Page() {
@@ -30,39 +31,48 @@ export default function Page() {
   const [selectedStatus, setSelectedStatus] = useState<string>("pendiente")
   const [economicNumber, setEconomicNumber] = useState<string>("")
   const [notes, setNotes] = useState<string>("")
-
-  // Permission check is done after data loads to check if it's an exit
+  const [canShip, setCanShip] = useState<boolean>(true)
 
   useEffect(() => {
     loadData()
   }, [])
 
   const loadData = async () => {
-    const response = await api.get<any>(`/load-orders/${loadOrderId}`)
+    const [orderRes, verificationRes] = await Promise.all([
+      api.get<any>(`/load-orders/${loadOrderId}`),
+      api.get<LoadOrderScanVerification>(`/load-orders/${loadOrderId}/scan-verification`),
+    ])
 
-    if (response.error) {
+    if (orderRes.error) {
       setError("Failed to load load order")
       setLoadingData(false)
       return
     }
 
-    if (response.data) {
-      const orderData = response.data
+    if (orderRes.data) {
+      const orderData = orderRes.data
       setLoadOrder(orderData)
-      setSelectedStatus(orderData.status)
       setEconomicNumber(orderData.economic_number || "")
       setNotes(orderData.notes || "")
+      setSelectedStatus(
+        orderData.status === "completed" ? "salida" : orderData.status === "open" || orderData.status === "in_progress" ? "pendiente" : orderData.status
+      )
 
-      // Check permissions - exits (status=salida) can only be edited by admin
-      const isExit = orderData.status === 'salida'
+      const isExit = orderData.status === "salida" || orderData.status === "completed"
       const canEdit = isExit
-        ? ability.can('update', 'Exit')
-        : ability.can('update', 'LoadOrder')
+        ? ability.can("update", "Exit")
+        : ability.can("update", "LoadOrder")
 
       if (!canEdit) {
-        router.push('/')
+        router.push("/")
         return
       }
+    }
+
+    if (verificationRes.data) {
+      setCanShip(verificationRes.data.can_ship)
+    } else {
+      setCanShip(true)
     }
 
     setLoadingData(false)
@@ -101,17 +111,33 @@ export default function Page() {
     setError(null)
 
     const previousStatus = loadOrder?.status
-    const isChangingToSalida = selectedStatus === "salida" && previousStatus !== "salida"
+    const previousIsSalida = previousStatus === "salida" || previousStatus === "completed"
+    const isChangingToSalida = selectedStatus === "salida" && !previousIsSalida
+
+    if (isChangingToSalida && !canShip) {
+      setError(
+        "All packages must be scanned before shipping. Complete scan verification on the load order detail page first."
+      )
+      setLoading(false)
+      return
+    }
+
+    const apiStatus =
+      selectedStatus === "salida" ? "completed" : selectedStatus === "pendiente" ? "open" : selectedStatus
 
     try {
-      const response = await api.patch(`/load-orders/${loadOrderId}`, {
-        status: selectedStatus,
+      const response = await api.patch(`/load-orders/${loadOrderId}/status`, {
+        status: isChangingToSalida ? "completed" : apiStatus,
+      })
+      if (response.error) throw new Error(response.error)
+
+      const updateRes = await api.patch(`/load-orders/${loadOrderId}`, {
         economic_number: economicNumber.trim() || null,
         notes: notes.trim() || null,
       })
 
-      if (response.error) {
-        throw new Error(response.error)
+      if (updateRes.error) {
+        throw new Error(updateRes.error)
       }
 
       // Send exit notification email when status changes to "salida"
@@ -171,21 +197,32 @@ export default function Page() {
               <Label htmlFor="status">
                 Status <span className="text-destructive">*</span>
               </Label>
-              <Select value={selectedStatus} onValueChange={setSelectedStatus} required>
+              <Select
+                value={selectedStatus}
+                onValueChange={setSelectedStatus}
+                required
+              >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="pendiente">Pending</SelectItem>
-                  <SelectItem value="salida">Shipped</SelectItem>
+                  <SelectItem value="salida" disabled={!canShip}>
+                    Shipped {!canShip && "(scan all packages first)"}
+                  </SelectItem>
                 </SelectContent>
               </Select>
+              {!canShip && loadOrder?.status !== "salida" && loadOrder?.status !== "completed" && (
+                <p className="text-sm text-amber-600">
+                  All packages must be scanned before shipping. Complete scan verification on the load order detail page.
+                </p>
+              )}
               <p className="text-sm text-muted-foreground">
                 {selectedStatus === "pendiente"
                   ? "Order is pending and awaiting dispatch"
                   : "Order has been dispatched for delivery"}
               </p>
-              {selectedStatus === "salida" && loadOrder?.status !== "salida" && (
+              {selectedStatus === "salida" && loadOrder?.status !== "salida" && loadOrder?.status !== "completed" && (
                 <div className="flex items-center gap-2 text-sm text-blue-600 bg-blue-50 p-3 rounded-md">
                   <Mail className="h-4 w-4" />
                   <span>

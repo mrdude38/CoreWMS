@@ -5,8 +5,8 @@ import { ArrowLeft, Download, FileText, ImageIcon, File } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { createClient } from "@/lib/supabase/server"
 import { requirePermission } from "@/lib/casl/server-guards"
+import { serverApi } from "@/lib/api/server"
 import { EntryActions } from "./entry-actions"
 import type { EntryAttachment } from "@/lib/types"
 
@@ -14,71 +14,36 @@ interface PageProps {
   params: Promise<{ id: string }>
 }
 
+interface EntryDetailResponse {
+  data?: {
+    id: string
+    entry_number: string
+    entry_date: string
+    status: string
+    total_packages?: number
+    total_weight?: number
+    is_damaged?: boolean
+    damage_description?: string | null
+    notes?: string | null
+    created_at: string
+    updated_at?: string | null
+    client?: { id: string; name?: string }
+    supplier?: { id: string; name?: string }
+    carrier?: { id: string; name?: string }
+    package_type?: string
+    received_by?: string | null
+    attachments?: EntryAttachment[]
+  }
+}
+
 async function getEntry(id: string) {
-  await requirePermission('read', 'Entry')
+  await requirePermission("read", "Entry")
 
-  const supabase = await createClient()
+  const res = await serverApi.get<EntryDetailResponse>(`entries/${id}`)
+  const raw = (res as any).data ?? res
+  const entry = raw?.data ?? raw
 
-  // First, get the entry with basic relations
-  const { data: entry, error } = await supabase
-    .from("entries")
-    .select(`
-      *,
-      clients(name),
-      suppliers(name)
-    `)
-    .eq("id", id)
-    .single()
-
-  if (error) {
-    console.error('Error fetching entry:', error)
-    return null
-  }
-
-  if (!entry) return null
-
-  // Get additional relations separately if they exist
-  if (entry.carrier_id) {
-    const { data: carrier } = await supabase
-      .from("carriers")
-      .select("name")
-      .eq("id", entry.carrier_id)
-      .single()
-    if (carrier) {
-      (entry as any).carriers = carrier
-    }
-  }
-
-  if (entry.package_type_id) {
-    const { data: packageType } = await supabase
-      .from("package_types")
-      .select("name")
-      .eq("id", entry.package_type_id)
-      .single()
-    if (packageType) {
-      (entry as any).package_types = packageType
-    }
-  }
-
-  if (entry.received_by) {
-    const { data: user } = await supabase
-      .from("users")
-      .select("name")
-      .eq("id", entry.received_by)
-      .single()
-    if (user) {
-      (entry as any).users = user
-    }
-  }
-
-  // Fetch attachments
-  const { data: attachments } = await supabase
-    .from("entry_attachments")
-    .select("*")
-    .eq("entry_id", id)
-    .order("created_at", { ascending: false })
-
-  ;(entry as any).attachments = attachments || []
+  if (!entry?.id) return null
 
   return entry
 }
@@ -93,8 +58,10 @@ async function EntryDetail({ id }: { id: string }) {
   const getStatusLabel = (status: string) => {
     switch (status) {
       case "pendiente":
+      case "pending":
         return "Pending"
       case "recibido":
+      case "received":
         return "Received"
       case "salida":
         return "Out for Delivery"
@@ -106,13 +73,22 @@ async function EntryDetail({ id }: { id: string }) {
   const getStatusVariant = (status: string) => {
     switch (status) {
       case "recibido":
+      case "received":
         return "default"
       case "pendiente":
+      case "pending":
         return "secondary"
       default:
         return "outline"
     }
   }
+
+  const clientName = entry.client?.name ?? (entry as any).clients?.name
+  const supplierName = entry.supplier?.name ?? (entry as any).suppliers?.name
+  const carrierName = entry.carrier?.name ?? (entry as any).carriers?.name
+  const packageTypeName = entry.package_type ?? (entry as any).package_types?.name
+  const receivedByName = (entry as any).users?.name ?? (entry.received_by ? "—" : "N/A")
+  const attachmentsList = entry.attachments ?? (entry as any).attachments ?? []
 
   return (
     <div className="max-w-4xl">
@@ -130,7 +106,12 @@ async function EntryDetail({ id }: { id: string }) {
           <h1 className="text-3xl font-bold tracking-tight">Entry {entry.entry_number}</h1>
           <p className="text-muted-foreground">Entry details and information</p>
         </div>
-        <EntryActions entryId={entry.id} entryNumber={entry.entry_number} />
+        <EntryActions
+          entryId={entry.id}
+          entryNumber={entry.entry_number}
+          entryStatus={entry.status}
+          clientName={clientName}
+        />
       </div>
 
       <div className="space-y-6">
@@ -156,15 +137,15 @@ async function EntryDetail({ id }: { id: string }) {
               </div>
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Client</p>
-                <p className="text-base">{(entry as any).clients?.name || "N/A"}</p>
+                <p className="text-base">{clientName ?? "N/A"}</p>
               </div>
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Supplier</p>
-                <p className="text-base">{(entry as any).suppliers?.name || "N/A"}</p>
+                <p className="text-base">{supplierName ?? "N/A"}</p>
               </div>
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Carrier</p>
-                <p className="text-base">{(entry as any).carriers?.name || "N/A"}</p>
+                <p className="text-base">{carrierName ?? "N/A"}</p>
               </div>
             </div>
           </CardContent>
@@ -184,7 +165,7 @@ async function EntryDetail({ id }: { id: string }) {
               </div>
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Package Type</p>
-                <p className="text-base">{(entry as any).package_types?.name || "N/A"}</p>
+                <p className="text-base">{packageTypeName ?? "N/A"}</p>
               </div>
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Total Weight</p>
@@ -192,7 +173,7 @@ async function EntryDetail({ id }: { id: string }) {
               </div>
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Received By</p>
-                <p className="text-base">{(entry as any).users?.name || "N/A"}</p>
+                <p className="text-base">{receivedByName}</p>
               </div>
             </div>
           </CardContent>
@@ -227,15 +208,15 @@ async function EntryDetail({ id }: { id: string }) {
         )}
 
         {/* Attachments */}
-        {(entry as any).attachments && (entry as any).attachments.length > 0 && (
+        {attachmentsList.length > 0 && (
           <Card>
             <CardHeader>
               <CardTitle>Attachments</CardTitle>
-              <CardDescription>{(entry as any).attachments.length} file(s) attached</CardDescription>
+              <CardDescription>{attachmentsList.length} file(s) attached</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
-                {(entry as any).attachments.map((attachment: EntryAttachment) => {
+                {attachmentsList.map((attachment: EntryAttachment) => {
                   const isImage = attachment.file_type?.startsWith("image/")
                   const isPdf = attachment.file_type === "application/pdf"
                   const FileIcon = isImage ? ImageIcon : isPdf ? FileText : File

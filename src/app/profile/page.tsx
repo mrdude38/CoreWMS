@@ -144,10 +144,8 @@ async function ProfileContent() {
                 <p className="text-lg font-semibold text-green-600">Active</p>
               </div>
               <div className="rounded-lg border p-4">
-                <p className="text-sm text-muted-foreground mb-1">Email Verified</p>
-                <p className="text-lg font-semibold">
-                  {user.email_confirmed_at ? 'Yes' : 'No'}
-                </p>
+                <p className="text-sm text-muted-foreground mb-1">User ID</p>
+                <p className="text-lg font-mono text-muted-foreground truncate" title={user.id}>{user.id}</p>
               </div>
               <div className="rounded-lg border p-4">
                 <p className="text-sm text-muted-foreground mb-1">Last Updated</p>

@@ -232,11 +232,12 @@ export default function Page() {
         is_partial: selected.isPartial,
       }))
 
-      // Create load order with items via backend API
+      // Create load order with items via backend API (status: open = pending, completed = shipped)
+      const apiStatus = selectedStatus === "salida" ? "completed" : "open"
       const response = await api.post<{ id: string; order_number: string }>('/load-orders', {
         client_id: selectedClient,
         carrier_id: selectedCarrier,
-        status: selectedStatus,
+        status: apiStatus,
         total_packages: getTotalPackages(),
         pedimento_invoice_number: pedimentoInvoice || null,
         economic_number: economicNumber.trim() || null,

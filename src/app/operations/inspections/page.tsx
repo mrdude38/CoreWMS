@@ -3,33 +3,21 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { createClient } from "@/lib/supabase/server"
-import type { Entry } from "@/lib/types"
+import { serverApi } from "@/lib/api/server"
 import { requirePermission } from "@/lib/casl/server-guards"
 import { getClientFilter } from "@/lib/casl/client-filter"
 import { CheckCircle2, XCircle } from "lucide-react"
 
 async function getEntries() {
-  await requirePermission('read', 'Entry')
+  await requirePermission("read", "Entry")
 
-  const supabase = await createClient()
-
-  // Get client filter if applicable
   const clientId = await getClientFilter()
+  const params: Record<string, string | number> = { page: 1, page_size: 500 }
+  if (clientId) params.client_id = clientId
 
-  let query = supabase
-    .from("entries")
-    .select("*, clients(name), suppliers(name)")
-    .order("created_at", { ascending: false })
-
-  // Apply client filter for client users
-  if (clientId) {
-    query = query.eq('client_id', clientId)
-  }
-
-  const { data } = await query
-
-  return (data || []) as Entry[]
+  const res = await serverApi.get<{ data?: any[] }>("entries", params as any)
+  const raw = (res as any).data ?? res
+  return Array.isArray((raw as any).data) ? (raw as any).data : []
 }
 
 function InspectionStatus({ completed, label }: { completed: boolean; label: string }) {
@@ -100,7 +88,7 @@ async function InspectionsContent() {
                       <Badge variant={getStatusVariant(entry.status)}>{translateStatus(entry.status)}</Badge>
                     </div>
                     <p className="text-sm text-muted-foreground">
-                      {(entry as any).clients?.name || "No client"} • {(entry as any).suppliers?.name || "No supplier"}
+                      {(entry.client ?? entry.clients)?.name ?? "No client"} • {(entry.supplier ?? entry.suppliers)?.name ?? "No supplier"}
                     </p>
                     <div className="flex items-center gap-4 mt-2">
                       <InspectionStatus completed={entry.has_invoice ?? false} label="Invoice" />

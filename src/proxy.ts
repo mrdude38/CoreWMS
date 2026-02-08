@@ -1,5 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createServerClient } from "@supabase/ssr"
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:9000"
+const AUTH_COOKIE = "corewms_access_token"
 
 // Define route access by role
 const routePermissions: Record<string, string[]> = {
@@ -67,114 +69,85 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next()
   }
 
-  let supabaseResponse = NextResponse.next({
-    request,
-  })
+  const response = NextResponse.next({ request })
+  const isPublicRoute = publicRoutes.some((route) => pathname.startsWith(route))
+  const isApiRoute = pathname.startsWith("/api/")
+
+  if (isApiRoute) {
+    return response
+  }
 
   try {
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          getAll() {
-            return request.cookies.getAll()
-          },
-          setAll(cookiesToSet) {
-            cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
-            supabaseResponse = NextResponse.next({
-              request,
-            })
-            cookiesToSet.forEach(({ name, value, options }) =>
-              supabaseResponse.cookies.set(name, value, options)
-            )
-          },
-        },
-      },
-    )
+    const token = request.cookies.get(AUTH_COOKIE)?.value
 
-    // IMPORTANT: Use getUser() instead of getSession() for proper JWT validation
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    // Check if it's a public route
-    const isPublicRoute = publicRoutes.some(route => pathname.startsWith(route))
-
-    // API routes handle their own authentication
-    const isApiRoute = pathname.startsWith('/api/')
-    if (isApiRoute) {
-      return supabaseResponse
+    if (!token) {
+      if (!isPublicRoute) {
+        const url = request.nextUrl.clone()
+        url.pathname = "/auth/login"
+        url.searchParams.set("redirect", pathname)
+        return NextResponse.redirect(url)
+      }
+      return response
     }
 
-    // If user is not authenticated and trying to access protected route
-    if (!user && !isPublicRoute) {
+    const meRes = await fetch(`${API_BASE}/api/v1/me`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+
+    if (!meRes.ok) {
+      if (!isPublicRoute) {
+        const url = request.nextUrl.clone()
+        url.pathname = "/auth/login"
+        url.searchParams.set("redirect", pathname)
+        const redirect = NextResponse.redirect(url)
+        redirect.cookies.set(AUTH_COOKIE, "", { path: "/", maxAge: 0 })
+        return redirect
+      }
+      return response
+    }
+
+    const data = await meRes.json()
+    const profile = data?.profile ?? data
+
+    if (!profile?.role) {
       const url = request.nextUrl.clone()
-      url.pathname = '/auth/login'
-      url.searchParams.set('redirect', pathname)
+      url.pathname = "/auth/login"
       return NextResponse.redirect(url)
     }
 
-    // If user is authenticated and trying to access auth pages, redirect to dashboard
-    if (user && isPublicRoute && pathname !== '/auth/callback') {
+    if (profile.is_active === false) {
       const url = request.nextUrl.clone()
-      url.pathname = '/'
+      url.pathname = "/auth/login"
+      const redirect = NextResponse.redirect(url)
+      redirect.cookies.set(AUTH_COOKIE, "", { path: "/", maxAge: 0 })
+      return redirect
+    }
+
+    if (isPublicRoute && pathname !== "/auth/callback") {
+      const url = request.nextUrl.clone()
+      url.pathname = "/"
       return NextResponse.redirect(url)
     }
 
-    // Check role-based permissions for authenticated users
-    if (user && !isPublicRoute) {
-      // Get user profile with role
-      const { data: profile } = await supabase
-        .from('user_profiles')
-        .select('role, client_id, is_active')
-        .eq('id', user.id)
-        .single()
-
-      if (!profile) {
-        // No profile found, redirect to login
-        const url = request.nextUrl.clone()
-        url.pathname = '/auth/login'
-        return NextResponse.redirect(url)
-      }
-
-      if (!profile.is_active) {
-        // User is inactive, redirect to logout
-        const url = request.nextUrl.clone()
-        url.pathname = '/api/auth/logout'
-        return NextResponse.redirect(url)
-      }
-
-      const userRole = profile.role
-
-      // Client users should be redirected from dashboard to entries
-      if (pathname === '/' && userRole === 'client') {
-        const url = request.nextUrl.clone()
-        url.pathname = '/operations/entries'
-        return NextResponse.redirect(url)
-      }
-
-      // Check if user has permission to access this route
-      const allowedRoles = getRoutePermissions(pathname)
-      
-      if (allowedRoles && !allowedRoles.includes(userRole)) {
-        // User doesn't have permission, redirect to appropriate page
-        const url = request.nextUrl.clone()
-        if (userRole === 'client') {
-          url.pathname = '/operations/entries'
-        } else {
-          url.pathname = '/'
-        }
-        return NextResponse.redirect(url)
-      }
+    const userRole = profile.role
+    if (pathname === "/" && userRole === "client") {
+      const url = request.nextUrl.clone()
+      url.pathname = "/operations/entries"
+      return NextResponse.redirect(url)
     }
 
-    return supabaseResponse
+    const allowedRoles = getRoutePermissions(pathname)
+    if (allowedRoles && !allowedRoles.includes(userRole)) {
+      const url = request.nextUrl.clone()
+      url.pathname = userRole === "client" ? "/operations/entries" : "/"
+      return NextResponse.redirect(url)
+    }
+
+    return response
   } catch (error) {
-    console.error(`[PROXY] ERROR:`, error)
-    // On error, redirect to login for safety
+    console.error("[PROXY] ERROR:", error)
     const url = request.nextUrl.clone()
-    url.pathname = '/auth/login'
+    url.pathname = "/auth/login"
     return NextResponse.redirect(url)
   }
 }

@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { createClient } from "@/lib/supabase/client"
+import { api } from "@/lib/api"
 import type { Client, PackageType } from "@/lib/types"
 import { Download, Filter } from "lucide-react"
 import { format } from "date-fns"
@@ -56,252 +56,111 @@ export default function Page() {
   }, [])
 
   const loadInitialData = async () => {
-    const supabase = createClient()
     const [clientsRes, packageTypesRes] = await Promise.all([
-      supabase.from("clients").select("*").eq("active", true).order("name"),
-      supabase.from("package_types").select("*").eq("active", true).order("name"),
+      api.get<{ data?: Client[] }>("catalogs/clients", { active: true }),
+      api.get<{ data?: PackageType[] }>("catalogs/package-types"),
     ])
-
-    if (clientsRes.data) setClients(clientsRes.data)
-    if (packageTypesRes.data) setPackageTypes(packageTypesRes.data)
+    const clientsList = (clientsRes as any).data ?? []
+    const typesList = (packageTypesRes as any).data ?? []
+    if (Array.isArray(clientsList)) setClients(clientsList)
+    if (Array.isArray(typesList)) setPackageTypes(typesList)
   }
 
   const loadInventoryReport = async () => {
     setLoading(true)
-    const supabase = createClient()
-
-    // Get all received entries
-    let entriesQuery = supabase
-      .from("entries")
-      .select(
-        `
-        *,
-        client:clients(name),
-        supplier:suppliers(name),
-        carrier:carriers(name),
-        package_type:package_types(name)
-      `,
-      )
-      .eq("status", "recibido")
-
-    if (inventoryClient !== "all") {
-      entriesQuery = entriesQuery.eq("client_id", inventoryClient)
-    }
-
-    const { data: entries, error: entriesError } = await entriesQuery.order("entry_date", { ascending: false })
-
-    if (!entries || entries.length === 0) {
-      setInventoryData([])
-      setLoading(false)
-      return
-    }
-
-    // Get shipped packages from load_order_items for shipped load orders (status = 'salida')
-    const { data: shippedItems, error: shippedError } = await supabase
-      .from("load_order_items")
-      .select(`
-        entry_id,
-        packages_quantity,
-        load_order:load_orders!inner(status)
-      `)
-      .eq("load_order.status", "salida")
-
-    // Calculate shipped packages per entry
-    const shippedByEntry = new Map<string, number>()
-    for (const item of shippedItems || []) {
-      const current = shippedByEntry.get(item.entry_id) || 0
-      shippedByEntry.set(item.entry_id, current + (item.packages_quantity || 0))
-    }
-
-    // Filter out entries where all packages have been shipped and add availability fields
-    const inventoryWithAvailability = entries
-      .map((entry: any) => {
-        const shipped = shippedByEntry.get(entry.id) || 0
-        const available = (entry.total_packages || 0) - shipped
-        return {
-          ...entry,
-          shipped_packages: shipped,
-          available_packages: available,
-        }
-      })
-      .filter((entry: any) => entry.available_packages > 0)
-
+    const params: Record<string, string> = {}
+    if (inventoryClient !== "all") params.client_id = inventoryClient
+    const res = await api.get<{ data?: Array<{ entry: any; available: number; shipped?: number; assigned?: number }>; total?: number }>("reports/inventory", params as any)
+    const raw = (res as any).data ?? res
+    const list = Array.isArray((raw as any).data) ? (raw as any).data : []
+    const inventoryWithAvailability = list.map((item: any) => {
+      const entry = item.entry ?? {}
+      const available = item.available ?? 0
+      const shipped = item.shipped ?? 0
+      return {
+        id: entry.id,
+        entry_number: entry.entry_number,
+        client: entry.client,
+        supplier: entry.supplier,
+        carrier: entry.carrier,
+        package_type: entry.package_type,
+        total_packages: entry.total_packages,
+        total_weight: entry.total_weight,
+        entry_date: entry.entry_date,
+        shipped_packages: shipped,
+        available_packages: available,
+      }
+    }).filter((row: any) => (row.available_packages ?? 0) > 0)
     setInventoryData(inventoryWithAvailability)
     setLoading(false)
   }
 
   const loadEntriesReport = async () => {
     setLoading(true)
-    const supabase = createClient()
-
-    let query = supabase.from("entries").select(
-      `
-        *,
-        client:clients(name),
-        supplier:suppliers(name),
-        carrier:carriers(name),
-        package_type:package_types(name),
-        received_by_user:user_profiles(full_name)
-      `,
-    )
-
-    if (entriesClient !== "all") {
-      query = query.eq("client_id", entriesClient)
-    }
-
-    if (entriesStartDate) {
-      query = query.gte("entry_date", entriesStartDate)
-    }
-
-    if (entriesEndDate) {
-      query = query.lte("entry_date", entriesEndDate)
-    }
-
+    const params: Record<string, string | number | undefined> = { page: 1, page_size: 500 }
+    if (entriesClient !== "all") params.client_id = entriesClient
+    if (entriesStartDate) params.start_date = entriesStartDate
+    if (entriesEndDate) params.end_date = entriesEndDate
+    const res = await api.get<{ data?: any[] }>("reports/entries", params)
+    const raw = (res as any).data ?? res
+    let list = Array.isArray((raw as any).data) ? (raw as any).data : []
     if (entriesPackageType !== "all") {
-      query = query.eq("package_type_id", entriesPackageType)
+      list = list.filter((e: any) => (e.package_type_id ?? e.package_type) === entriesPackageType || (typeof e.package_type === "object" && e.package_type?.id === entriesPackageType))
     }
-
-    const { data, error } = await query.order("entry_date", { ascending: false })
-
-    if (data) setEntriesData(data)
+    setEntriesData(list)
     setLoading(false)
   }
 
   const loadExitsReport = async () => {
     setLoading(true)
-    const supabase = createClient()
-
-    // Query load orders with client and carrier
-    let loadOrdersQuery = supabase
-      .from("load_orders")
-      .select(`
-        id,
-        order_number,
-        status,
-        total_packages,
-        pedimento_invoice_number,
-        economic_number,
-        created_at,
-        client:clients(name),
-        carrier:carriers(name)
-      `)
-      .eq("status", "salida")
-
-    if (exitsClient !== "all") {
-      loadOrdersQuery = loadOrdersQuery.eq("client_id", exitsClient)
-    }
-
-    if (exitsStartDate) {
-      loadOrdersQuery = loadOrdersQuery.gte("created_at", exitsStartDate)
-    }
-
-    if (exitsEndDate) {
-      loadOrdersQuery = loadOrdersQuery.lte("created_at", exitsEndDate)
-    }
-
-    const { data: loadOrders, error: loadOrdersError } = await loadOrdersQuery.order("created_at", { ascending: false })
-
-    if (!loadOrders || loadOrders.length === 0) {
-      setExitsData([])
-      setLoading(false)
-      return
-    }
-
-    // Query load_order_items with entry details for those load orders
-    const loadOrderIds = loadOrders.map((lo: any) => lo.id)
-    const { data: items, error: itemsError } = await supabase
-      .from("load_order_items")
-      .select(`
-        load_order_id,
-        packages_quantity,
-        entry:entries(
-          entry_number,
-          package_type_id,
-          package_type:package_types(id, name)
-        )
-      `)
-      .in("load_order_id", loadOrderIds)
-
-    // Group items by load_order_id and combine entry numbers and package types
-    const itemsByLoadOrder = new Map<string, any[]>()
-    for (const item of items || []) {
-      const existing = itemsByLoadOrder.get(item.load_order_id) || []
-      existing.push(item)
-      itemsByLoadOrder.set(item.load_order_id, existing)
-    }
-
-    // Build combined exit data
-    let exitsWithItems = loadOrders.map((lo: any) => {
-      const loItems = itemsByLoadOrder.get(lo.id) || []
-      const entryNumbers = loItems.map((item: any) => item.entry?.entry_number).filter(Boolean)
-      const packageTypes = [...new Set(loItems.map((item: any) => item.entry?.package_type?.name).filter(Boolean))]
-      const packageTypeIds = loItems.map((item: any) => item.entry?.package_type_id).filter(Boolean)
-      
+    const params: Record<string, string | number | undefined> = { page: 1, page_size: 500 }
+    if (exitsClient !== "all") params.client_id = exitsClient
+    if (exitsStartDate) params.start_date = exitsStartDate
+    if (exitsEndDate) params.end_date = exitsEndDate
+    const res = await api.get<{ data?: any[] }>("reports/exits", params)
+    const raw = (res as any).data ?? res
+    const loadOrders = Array.isArray((raw as any).data) ? (raw as any).data : []
+    const exitsWithItems = loadOrders.map((lo: any) => {
+      const items = lo.items ?? []
+      const entryNumbers = items.map((item: any) => (item.entry ?? item.entries)?.entry_number).filter(Boolean)
+      const packageTypeNames = [...new Set(items.map((item: any) => {
+        const e = item.entry ?? item.entries
+        return typeof e?.package_type === "string" ? e.package_type : e?.package_type?.name
+      }).filter(Boolean))]
+      const packageTypeIds = items.map((item: any) => (item.entry ?? item.entries)?.package_type_id).filter(Boolean)
       return {
         ...lo,
-        entries: entryNumbers.join(", ") || "-",
-        package_types: packageTypes.join(", ") || "-",
+        entries: entryNumbers.length ? entryNumbers.join(", ") : "-",
+        package_types: packageTypeNames.length ? packageTypeNames.join(", ") : "-",
         package_type_ids: packageTypeIds,
       }
     })
-
-    // Filter by package type if selected
+    let filtered = exitsWithItems
     if (exitsPackageType !== "all") {
-      exitsWithItems = exitsWithItems.filter((exit: any) => 
-        exit.package_type_ids.includes(exitsPackageType)
-      )
+      filtered = exitsWithItems.filter((exit: any) => (exit.package_type_ids ?? []).includes(exitsPackageType))
     }
-
-    setExitsData(exitsWithItems)
+    setExitsData(filtered)
     setLoading(false)
   }
 
   const loadPerformanceReport = async () => {
     setLoading(true)
-    const supabase = createClient()
-
-    let entriesQuery = supabase.from("entries").select("entry_date, total_packages, total_weight")
-
-    let loadOrdersQuery = supabase.from("load_orders").select("created_at, total_packages")
-
-    if (performanceStartDate) {
-      entriesQuery = entriesQuery.gte("entry_date", performanceStartDate)
-      loadOrdersQuery = loadOrdersQuery.gte("created_at", performanceStartDate)
-    }
-
-    if (performanceEndDate) {
-      entriesQuery = entriesQuery.lte("entry_date", performanceEndDate)
-      loadOrdersQuery = loadOrdersQuery.lte("created_at", performanceEndDate)
-    }
-
-    const [entriesRes, loadOrdersRes, clientsCountRes, suppliersCountRes, carriersCountRes] = await Promise.all([
-      entriesQuery,
-      loadOrdersQuery,
-      supabase.from("clients").select("*", { count: "exact", head: true }).eq("active", true),
-      supabase.from("suppliers").select("*", { count: "exact", head: true }).eq("active", true),
-      supabase.from("carriers").select("*", { count: "exact", head: true }).eq("active", true),
-    ])
-
-    const entries = entriesRes.data || []
-    const loadOrders = loadOrdersRes.data || []
-
-    const totalEntries = entries.length
-    const totalLoadOrders = loadOrders.length
-    const totalPackagesIn = entries.reduce((sum: number, e: any) => sum + (e.total_packages || 0), 0)
-    const totalPackagesOut = loadOrders.reduce((sum: number, e: any) => sum + (e.total_packages || 0), 0)
-    const totalWeight = entries.reduce((sum: number, e: any) => sum + (e.total_weight || 0), 0)
-
+    const params: Record<string, string | undefined> = {}
+    if (performanceStartDate) params.start_date = performanceStartDate
+    if (performanceEndDate) params.end_date = performanceEndDate
+    const res = await api.get<{ data?: any }>("reports/performance", params as any)
+    const raw = (res as any).data ?? res
+    const d = (raw as any).data ?? raw
     setPerformanceData({
-      totalEntries,
-      totalLoadOrders,
-      totalPackagesIn,
-      totalPackagesOut,
-      totalWeight,
-      activeClients: clientsCountRes.count || 0,
-      activeSuppliers: suppliersCountRes.count || 0,
-      activeCarriers: carriersCountRes.count || 0,
+      totalEntries: d.entries_count ?? 0,
+      totalLoadOrders: d.load_orders_count ?? 0,
+      totalPackagesIn: d.total_packages_entries ?? 0,
+      totalPackagesOut: d.total_packages_load_orders ?? 0,
+      totalWeight: d.total_weight_kg ?? 0,
+      activeClients: d.clients_count ?? 0,
+      activeSuppliers: d.suppliers_count ?? 0,
+      activeCarriers: d.carriers_count ?? 0,
     })
-
     setLoading(false)
   }
 
@@ -411,7 +270,7 @@ export default function Page() {
                           <TableCell>{item.carrier?.name || "-"}</TableCell>
                           <TableCell className="font-medium text-green-600">{item.available_packages}</TableCell>
                           <TableCell>{item.total_packages}</TableCell>
-                          <TableCell>{item.package_type?.name || "-"}</TableCell>
+                          <TableCell>{typeof item.package_type === "object" ? item.package_type?.name : item.package_type || "-"}</TableCell>
                           <TableCell>{item.total_weight?.toFixed(2)}</TableCell>
                           <TableCell>{format(new Date(item.entry_date), "MMM dd, yyyy")}</TableCell>
                         </TableRow>
@@ -522,7 +381,7 @@ export default function Page() {
                             <span className="capitalize">{entry.status}</span>
                           </TableCell>
                           <TableCell>{entry.total_packages}</TableCell>
-                          <TableCell>{entry.package_type?.name || "-"}</TableCell>
+                          <TableCell>{typeof entry.package_type === "object" ? entry.package_type?.name : entry.package_type || "-"}</TableCell>
                           <TableCell>{entry.total_weight?.toFixed(2)}</TableCell>
                           <TableCell>{entry.received_by_user?.full_name || "-"}</TableCell>
                           <TableCell>{format(new Date(entry.entry_date), "MMM dd, yyyy")}</TableCell>
@@ -715,7 +574,7 @@ export default function Page() {
 
                   <Card>
                     <CardHeader className="pb-3">
-                      <CardTitle className="text-sm font-medium">Total Weight (lbs)</CardTitle>
+                      <CardTitle className="text-sm font-medium">Total Weight (kg)</CardTitle>
                     </CardHeader>
                     <CardContent>
                       <div className="text-2xl font-bold">{performanceData.totalWeight.toFixed(2)}</div>

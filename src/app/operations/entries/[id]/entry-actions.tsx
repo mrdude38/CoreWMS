@@ -2,21 +2,33 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { Mail, Loader2 } from "lucide-react"
+import { Mail, Loader2, Printer } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ProtectedEditButton } from "@/components/protected-edit-button"
 import { ProtectedDeleteButton } from "@/components/protected-delete-button"
+import { PrintLabelsDialog } from "@/components/barcode/print-labels-dialog"
 import { api } from "@/lib/api"
 
 interface EntryActionsProps {
   entryId: string
   entryNumber: string
+  entryStatus?: string
+  clientName?: string
 }
 
-export function EntryActions({ entryId, entryNumber }: EntryActionsProps) {
+export function EntryActions({
+  entryId,
+  entryNumber,
+  entryStatus,
+  clientName,
+}: EntryActionsProps) {
   const router = useRouter()
   const [deleting, setDeleting] = useState(false)
   const [sendingEmail, setSendingEmail] = useState(false)
+  const [printLabelsOpen, setPrintLabelsOpen] = useState(false)
+
+  const canPrintLabels =
+    (entryStatus === "recibido" || entryStatus === "received") && !!entryId
 
   const handleDelete = async () => {
     if (!confirm(`Are you sure you want to delete entry ${entryNumber}?`)) {
@@ -58,7 +70,23 @@ export function EntryActions({ entryId, entryNumber }: EntryActionsProps) {
   }
 
   return (
-    <div className="flex gap-2">
+    <div className="flex flex-wrap gap-2">
+      {canPrintLabels && (
+        <Button
+          variant="outline"
+          onClick={() => setPrintLabelsOpen(true)}
+        >
+          <Printer className="mr-2 h-4 w-4" />
+          Print Labels
+        </Button>
+      )}
+      <PrintLabelsDialog
+        open={printLabelsOpen}
+        onOpenChange={setPrintLabelsOpen}
+        entryId={entryId}
+        entryNumber={entryNumber}
+        clientName={clientName}
+      />
       <Button
         variant="outline"
         onClick={handleResendEmail}

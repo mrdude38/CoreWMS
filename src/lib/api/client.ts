@@ -1,7 +1,7 @@
 "use client";
 
 import { getApiUrl } from './config';
-import { createClient } from '@/lib/supabase/client';
+import { getAccessToken as getTokenFromCookie } from '@/lib/auth/token-cookie';
 
 export interface ApiResponse<T> {
   data?: T;
@@ -28,11 +28,9 @@ export interface RequestOptions {
   headers?: Record<string, string>;
 }
 
-// Get the access token from Supabase session
-async function getAccessToken(): Promise<string | null> {
-  const supabase = createClient();
-  const { data: { session } } = await supabase.auth.getSession();
-  return session?.access_token || null;
+// Get the access token from cookie (set after backend login)
+function getAccessToken(): string | null {
+  return getTokenFromCookie();
 }
 
 // Client-side API fetch function
@@ -58,7 +56,7 @@ export async function apiClient<T>(
   }
 
   // Get auth token
-  const token = await getAccessToken();
+  const token = getAccessToken();
 
   const fetchHeaders: Record<string, string> = {
     'Content-Type': 'application/json',

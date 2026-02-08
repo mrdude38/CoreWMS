@@ -75,6 +75,28 @@ export interface PreEntry {
   clients?: Client
 }
 
+// Package code for barcode/QR verification (format e.g. ENT-0020-001)
+export interface EntryPackageCode {
+  id: string
+  entry_id: string
+  package_number: number
+  code: string
+  status: 'available' | 'assigned' | 'shipped'
+  assigned_load_order_id?: string | null
+  created_at: string
+}
+
+// Scan verification for a load order
+export interface LoadOrderScanVerification {
+  load_order_id: string
+  scan_verified: boolean
+  scan_verified_at: string | null
+  assigned_count: number
+  scanned_count: number
+  pending_count: number
+  can_ship: boolean
+}
+
 export interface LoadOrder {
   id: string
   order_number: string
@@ -85,6 +107,8 @@ export interface LoadOrder {
   destination?: string
   notes?: string
   total_packages: number
+  scan_verified?: boolean
+  scan_verified_at?: string | null
   created_at: string
   updated_at: string
   clients?: Client

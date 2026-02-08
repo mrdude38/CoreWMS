@@ -10,7 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { createClient } from "@/lib/supabase/client"
+import { api } from "@/lib/api"
 
 export default function Page() {
   const router = useRouter()
@@ -32,17 +32,14 @@ export default function Page() {
     const formData = new FormData(e.currentTarget)
 
     try {
-      const supabase = createClient()
-      const { error: insertError } = await supabase.from("suppliers").insert({
+      const res = await api.post("catalogs/suppliers", {
         name: formData.get("name") as string,
-        contact_name: formData.get("contact_name") as string,
-        email: formData.get("email") as string,
-        phone: formData.get("phone") as string,
-        address: formData.get("address") as string,
+        contact_name: (formData.get("contact_name") as string) || undefined,
+        email: (formData.get("email") as string) || undefined,
+        phone: (formData.get("phone") as string) || undefined,
+        address: (formData.get("address") as string) || undefined,
       })
-
-      if (insertError) throw insertError
-
+      if ((res as any).error) throw new Error((res as any).error)
       router.push("/catalogs/suppliers")
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred")

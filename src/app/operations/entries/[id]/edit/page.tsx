@@ -191,7 +191,7 @@ export default function Page() {
         po_number: poNumber,
         maniobras_entry_number: maniobrasEntryNumber || null,
         package_type_id: selectedPackageTypeId || null,
-        status: selectedStatus,
+        status: selectedStatus === "recibido" || selectedStatus === "received" ? "received" : "pending",
         total_packages: Number.parseInt(totalPackages) || 0,
         total_weight: totalWeight ? Number.parseFloat(totalWeight) : null,
         received_by: selectedReceivedBy || null,

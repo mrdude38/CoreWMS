@@ -4,7 +4,7 @@ import { notFound } from "next/navigation"
 import { ArrowLeft, Mail, Phone, Building2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { createClient } from "@/lib/supabase/server"
+import { serverApi } from "@/lib/api/server"
 import { requirePermission } from "@/lib/casl/server-guards"
 import type { Client } from "@/lib/types"
 
@@ -13,22 +13,11 @@ interface PageProps {
 }
 
 async function getClient(id: string) {
-  await requirePermission('read', 'Catalog')
-
-  const supabase = await createClient()
-
-  const { data: client, error } = await supabase
-    .from("clients")
-    .select("*")
-    .eq("id", id)
-    .single()
-
-  if (error) {
-    console.error('Error fetching client:', error)
-    return null
-  }
-
-  return client as Client
+  await requirePermission("read", "Catalog")
+  const res = await serverApi.get<{ data?: Client }>(`catalogs/clients/${id}`)
+  const raw = (res as any).data ?? res
+  const client = (raw as any).data ?? raw
+  return client?.id ? (client as Client) : null
 }
 
 async function ClientDetail({ id }: { id: string }) {

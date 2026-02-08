@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers';
-import { createServerClient } from '@supabase/ssr';
 import { getApiUrl } from './config';
+
+const AUTH_COOKIE = 'corewms_access_token';
 import { createClientService } from './services/clients';
 import { createSupplierService } from './services/suppliers';
 import { createCarrierService } from './services/carriers';
@@ -32,27 +33,10 @@ export interface RequestOptions {
   headers?: Record<string, string>;
 }
 
-// Get the access token from Supabase session (server-side)
+// Get the access token from auth cookie (set after backend login)
 async function getAccessToken(): Promise<string | null> {
   const cookieStore = await cookies();
-  
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll();
-        },
-        setAll() {
-          // Server components can't set cookies
-        },
-      },
-    }
-  );
-  
-  const { data: { session } } = await supabase.auth.getSession();
-  return session?.access_token || null;
+  return cookieStore.get(AUTH_COOKIE)?.value ?? null;
 }
 
 // Server-side API fetch function

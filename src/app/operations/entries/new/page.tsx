@@ -157,7 +157,7 @@ export default function Page() {
         maniobras_entry_number: (formData.get("maniobras_entry_number") as string) || null,
         package_type_id: (formData.get("package_type") as string) || null,
         entry_date: new Date().toISOString().split('T')[0],
-        status: formData.get("status") as string || "pendiente",
+        status: (formData.get("status") as string) === "recibido" ? "received" : "pending",
         total_packages: Number.parseInt(formData.get("total_packages") as string) || 0,
         total_weight: Number.parseFloat(formData.get("total_weight_lbs") as string) || null,
         received_by: (formData.get("received_by") as string) || null,

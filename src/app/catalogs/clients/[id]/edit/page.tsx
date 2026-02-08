@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { createClient } from "@/lib/supabase/client"
+import { api } from "@/lib/api"
 import { ArrowLeft, Loader2 } from "lucide-react"
 import type { Client } from "@/lib/types"
 
@@ -37,18 +37,13 @@ export default function Page({ params }: PageProps) {
 
     const loadClient = async () => {
       try {
-        const supabase = createClient()
-        const { data, error: fetchError } = await supabase
-          .from("clients")
-          .select("*")
-          .eq("id", clientId)
-          .single()
-
-        if (fetchError) throw fetchError
-        setClient(data as Client)
+        const res = await api.get<{ data?: Client }>(`catalogs/clients/${clientId}`)
+        const raw = (res as any).data ?? res
+        const data = (raw as any).data ?? raw
+        if (data?.id) setClient(data as Client)
       } catch (err) {
-        console.error('Error loading client:', err)
-        setError('Failed to load client data')
+        console.error("Error loading client:", err)
+        setError("Failed to load client data")
       } finally {
         setInitialLoading(false)
       }
@@ -77,33 +72,16 @@ export default function Page({ params }: PageProps) {
     const formData = new FormData(e.currentTarget)
 
     try {
-      const supabase = createClient()
-      const { data, error: updateError } = await supabase
-        .from("clients")
-        .update({
-          name: formData.get("name") as string,
-          email: formData.get("email") as string || null,
-          phone: formData.get("phone") as string || null,
-        })
-        .eq("id", clientId)
-        .select()
-
-      console.log('Update response:', { data, updateError })
-
-      if (updateError) {
-        console.error('Update error:', updateError)
-        throw updateError
-      }
-
-      if (!data || data.length === 0) {
-        throw new Error("No se pudo actualizar el cliente. Verifica que tienes permisos de edición.")
-      }
-
+      const res = await api.put(`catalogs/clients/${clientId}`, {
+        name: formData.get("name") as string,
+        email: (formData.get("email") as string) || undefined,
+        phone: (formData.get("phone") as string) || undefined,
+      })
+      if ((res as any).error) throw new Error((res as any).error)
       router.push(`/catalogs/clients/${clientId}`)
     } catch (err: any) {
-      console.error('Error updating client:', err)
-      // Handle Supabase error structure
-      const errorMessage = err?.message || err?.error_description || err?.details || JSON.stringify(err) || "An error occurred"
+      console.error("Error updating client:", err)
+      const errorMessage = err?.message ?? (err as Error)?.toString?.() ?? "An error occurred"
       setError(errorMessage)
     } finally {
       setLoading(false)

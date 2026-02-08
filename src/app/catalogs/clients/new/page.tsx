@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { createClient } from "@/lib/supabase/client"
+import { api } from "@/lib/api"
 
 export default function Page() {
   const router = useRouter()
@@ -31,15 +31,12 @@ export default function Page() {
     const formData = new FormData(e.currentTarget)
 
     try {
-      const supabase = createClient()
-      const { error: insertError } = await supabase.from("clients").insert({
+      const res = await api.post("catalogs/clients", {
         name: formData.get("name") as string,
-        email: formData.get("email") as string || null,
-        phone: formData.get("phone") as string || null,
+        email: (formData.get("email") as string) || undefined,
+        phone: (formData.get("phone") as string) || undefined,
       })
-
-      if (insertError) throw insertError
-
+      if ((res as any).error) throw new Error((res as any).error)
       router.push("/catalogs/clients")
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred")

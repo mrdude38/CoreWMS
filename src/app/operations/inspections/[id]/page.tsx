@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
-import { createClient } from "@/lib/supabase/client"
+import { api } from "@/lib/api"
 import { useAbility } from "@/lib/casl/ability-context"
 
 export default function Page() {
@@ -40,50 +40,31 @@ export default function Page() {
   }, [entryId])
 
   const loadEntry = async () => {
-    const supabase = createClient()
-
-    const { data, error } = await supabase
-      .from("entries")
-      .select(`
-        *,
-        clients(name),
-        suppliers(name),
-        carriers(name)
-      `)
-      .eq("id", entryId)
-      .single()
-
-    if (data) {
+    const res = await api.get<{ data?: any }>(`entries/${entryId}`)
+    const raw = (res as any).data ?? res
+    const data = (raw as any).data ?? raw
+    if (data?.id) {
       setEntry(data)
       setHasInvoice(data.has_invoice ?? false)
       setHasRevision(data.has_revision ?? false)
       setHasClassification(data.has_classification ?? false)
     }
-
     setLoading(false)
   }
 
   const handleSave = async () => {
     setSaving(true)
-
-    const supabase = createClient()
-
-    const { error } = await supabase
-      .from("entries")
-      .update({
-        has_invoice: hasInvoice,
-        has_revision: hasRevision,
-        has_classification: hasClassification,
-      })
-      .eq("id", entryId)
-
-    if (error) {
-      console.error("Error saving inspection:", error)
+    const res = await api.put<{ error?: string }>(`entries/${entryId}`, {
+      has_invoice: hasInvoice,
+      has_revision: hasRevision,
+      has_classification: hasClassification,
+    })
+    if ((res as any).error) {
+      console.error("Error saving inspection:", (res as any).error)
       alert("Error saving inspection")
     } else {
       router.push("/operations/inspections")
     }
-
     setSaving(false)
   }
 
@@ -110,19 +91,9 @@ export default function Page() {
 
       const { url } = await response.json()
 
-      // Update entry with invoice URL and mark has_invoice as true
-      const supabase = createClient()
-      const { error } = await supabase
-        .from("entries")
-        .update({
-          invoice_url: url,
-          has_invoice: true,
-        })
-        .eq("id", entryId)
+      const updateRes = await api.put(`entries/${entryId}`, { invoice_url: url, has_invoice: true })
+      if ((updateRes as any).error) throw new Error((updateRes as any).error)
 
-      if (error) throw error
-
-      // Update local state
       setEntry({ ...entry, invoice_url: url })
       setHasInvoice(true)
 
@@ -200,11 +171,11 @@ export default function Page() {
               </div>
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Client</p>
-                <p className="text-base">{entry.clients?.name || "N/A"}</p>
+                <p className="text-base">{(entry.client ?? entry.clients)?.name ?? "N/A"}</p>
               </div>
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Supplier</p>
-                <p className="text-base">{entry.suppliers?.name || "N/A"}</p>
+                <p className="text-base">{(entry.supplier ?? entry.suppliers)?.name ?? "N/A"}</p>
               </div>
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Entry Date</p>

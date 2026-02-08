@@ -1,16 +1,26 @@
 "use client"
 
 import { createContext, useContext, useEffect, useState } from "react"
-import { createClient } from "@/lib/supabase/client"
-import type { User } from "@supabase/supabase-js"
 import type { UserProfile } from "@/lib/types"
 import { defineAbilityFor } from "@/lib/casl/factory"
 import { AbilityContext } from "@/lib/casl/ability-context"
 import type { AppAbility } from "@/lib/casl/subjects"
 import { api } from "@/lib/api"
+import { getAccessToken, clearAccessToken } from "@/lib/auth/token-cookie"
+
+/** Minimal user from backend (no Supabase) */
+export interface AuthUser {
+  id: string
+  email: string
+}
+
+interface CurrentUserResponse {
+  user: AuthUser
+  profile: UserProfile
+}
 
 interface AuthContextType {
-  user: User | null
+  user: AuthUser | null
   profile: UserProfile | null
   loading: boolean
   signOut: () => Promise<void>
@@ -20,95 +30,58 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null)
+  const [user, setUser] = useState<AuthUser | null>(null)
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
   const [ability, setAbility] = useState<AppAbility>(() => defineAbilityFor(null))
 
-  useEffect(() => {
-    const supabase = createClient()
-
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null)
-      if (session?.user) {
-        loadProfile()
-      } else {
-        setLoading(false)
-      }
-    })
-
-    // Listen for auth changes
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null)
-      if (session?.user) {
-        loadProfile()
-      } else {
-        setProfile(null)
-        setAbility(defineAbilityFor(null))
-        setLoading(false)
-      }
-    })
-
-    return () => subscription.unsubscribe()
-  }, [])
-
   const loadProfile = async () => {
     try {
-      // Load profile from backend API
-      const response = await api.get<UserProfile>('/auth/me')
-
-      if (response.error) {
-        console.error('Error loading profile from API:', response.error)
-        throw new Error(response.error)
+      const response = await api.get<CurrentUserResponse>("/me")
+      if (response.error || !response.data) {
+        setUser(null)
+        setProfile(null)
+        setAbility(defineAbilityFor(null))
+        clearAccessToken()
+        return
       }
-
-      if (response.data) {
-        setProfile(response.data)
-        setAbility(defineAbilityFor(response.data))
-      }
+      const { user: u, profile: p } = response.data
+      setUser(u)
+      setProfile(p)
+      setAbility(defineAbilityFor(p))
     } catch (error) {
-      console.error('Error loading profile:', error)
+      console.error("Error loading profile:", error)
+      setUser(null)
       setProfile(null)
       setAbility(defineAbilityFor(null))
+      clearAccessToken()
     } finally {
       setLoading(false)
     }
   }
 
+  useEffect(() => {
+    const token = getAccessToken()
+    if (token) {
+      loadProfile()
+    } else {
+      setLoading(false)
+    }
+  }, [])
+
   const refreshProfile = async () => {
-    await loadProfile()
+    if (getAccessToken()) await loadProfile()
   }
 
   const signOut = async () => {
+    setUser(null)
+    setProfile(null)
+    setAbility(defineAbilityFor(null))
+    clearAccessToken()
     try {
-      const supabase = createClient()
-
-      // Clear local state first for immediate UI update
-      setUser(null)
-      setProfile(null)
-      setAbility(defineAbilityFor(null))
-
-      // Call backend logout
-      try {
-        await api.post('/auth/logout')
-      } catch {
-        // Ignore backend logout errors
-      }
-
-      // Sign out from Supabase (this clears the auth cookies)
-      await supabase.auth.signOut({ scope: 'local' })
-
-      // Small delay to ensure cookies are cleared before redirect
-      await new Promise(resolve => setTimeout(resolve, 100))
-    } catch (error) {
-      console.error('Error during sign out:', error)
-      // Even if signOut fails, clear local state
-      setUser(null)
-      setProfile(null)
-      setAbility(defineAbilityFor(null))
+      await api.post("/auth/signout")
+    } catch {
+      // ignore
     }
   }
 
