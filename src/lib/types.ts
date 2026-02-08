@@ -56,6 +56,9 @@ export interface Entry {
   invoice_url?: string
   created_at: string
   updated_at: string
+  client?: Client
+  supplier?: Supplier
+  carrier?: Carrier
   clients?: Client
   suppliers?: Supplier
   carriers?: Carrier
@@ -111,6 +114,8 @@ export interface LoadOrder {
   scan_verified_at?: string | null
   created_at: string
   updated_at: string
+  client?: Client
+  carrier?: Carrier
   clients?: Client
   carriers?: Carrier
 }

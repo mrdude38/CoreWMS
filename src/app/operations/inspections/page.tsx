@@ -7,17 +7,19 @@ import { serverApi } from "@/lib/api/server"
 import { requirePermission } from "@/lib/casl/server-guards"
 import { getClientFilter } from "@/lib/casl/client-filter"
 import { CheckCircle2, XCircle } from "lucide-react"
+import type { Entry } from "@/lib/types"
 
-async function getEntries() {
+async function getEntries(): Promise<Entry[]> {
   await requirePermission("read", "Entry")
 
   const clientId = await getClientFilter()
   const params: Record<string, string | number> = { page: 1, page_size: 500 }
   if (clientId) params.client_id = clientId
 
-  const res = await serverApi.get<{ data?: any[] }>("entries", params as any)
-  const raw = (res as any).data ?? res
-  return Array.isArray((raw as any).data) ? (raw as any).data : []
+  const res = await serverApi.get<{ data?: Entry[] }>("entries", params as any)
+  const raw = (res as any).data ?? res  
+  const data = (raw as any).data ?? raw
+  return Array.isArray(data) ? data : []
 }
 
 function InspectionStatus({ completed, label }: { completed: boolean; label: string }) {
@@ -80,7 +82,7 @@ async function InspectionsContent() {
             </div>
           ) : (
             <div className="space-y-4">
-              {entries.map((entry) => (
+              {entries.map((entry: Entry) => (
                 <div key={entry.id} className="flex items-center justify-between border-b pb-4 last:border-0 last:pb-0">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">

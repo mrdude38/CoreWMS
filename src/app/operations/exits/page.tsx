@@ -4,11 +4,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { serverApi } from "@/lib/api/server"
+import type { LoadOrder } from "@/lib/types"
 
-async function getExits() {
-  const res = await serverApi.get<{ data?: any[] }>("load-orders", { status: "completed" })
-  const raw = (res as any).data ?? res
-  return Array.isArray((raw as any).data) ? (raw as any).data : []
+async function getExits(): Promise<LoadOrder[]> {
+  const res = await serverApi.get<{ data?: LoadOrder[] }>("load-orders", { status: "completed" })
+  return Array.isArray(res.data) ? res.data : []
 }
 
 async function ExitsContent() {
@@ -34,7 +34,7 @@ async function ExitsContent() {
             </div>
           ) : (
             <div className="space-y-4">
-              {exits.map((exit) => (
+              {exits.map((exit: LoadOrder) => (
                 <div key={exit.id} className="flex items-center justify-between border-b pb-4 last:border-0 last:pb-0">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
